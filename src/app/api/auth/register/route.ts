@@ -14,6 +14,17 @@ const registerSchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    if (!process.env.DATABASE_URL) {
+      console.error("Missing DATABASE_URL environment variable.");
+      return NextResponse.json(
+        {
+          error:
+            "Database connection not configured. Please add DATABASE_URL to your Vercel Environment Variables.",
+        },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json();
     const parsed = registerSchema.safeParse(body);
 
@@ -64,6 +75,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, user }, { status: 201 });
   } catch (error) {
     console.error("Sign-up error:", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("DATABASE_URL") || msg.includes("Environment variable not found")) {
+      return NextResponse.json(
+        {
+          error:
+            "Database connection not configured. Please add DATABASE_URL in Vercel Project Settings -> Environment Variables.",
+        },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
       { error: "An unexpected error occurred during registration" },
       { status: 500 }
