@@ -1,0 +1,50 @@
+name: Dispatch Reminders Cron
+
+on:
+  schedule:
+    # Runs every 10 minutes (100% free external cron trigger)
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab for testing
+
+jobs:
+  dispatch-reminders:
+    name: Ping Reminders Dispatcher
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Reminders Endpoint
+        run: |
+          TARGET_URL="${{ secrets.APP_URL || secrets.VERCEL_URL }}"
+          SECRET="${{ secrets.CRON_SECRET }}"
+
+          if [ -z "$TARGET_URL" ]; then
+            echo "❌ Error: Neither APP_URL nor VERCEL_URL secret is defined."
+            echo "Please add APP_URL (e.g., https://your-project.vercel.app) to GitHub Secrets under Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+          # Ensure URL has protocol and remove trailing slash
+          if [[ ! "$TARGET_URL" =~ ^https?:// ]]; then
+            TARGET_URL="https://$TARGET_URL"
+          fi
+          TARGET_URL="${TARGET_URL%/}"
+
+          echo "🚀 Triggering reminder dispatcher at $TARGET_URL/api/cron/dispatch-reminders ..."
+
+          HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$TARGET_URL/api/cron/dispatch-reminders" \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json")
+
+          HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
+          HTTP_STATUS=$(echo "$HTTP_RESPONSE" | tail -n1)
+
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response Body: $HTTP_BODY"
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "✅ Successfully dispatched reminders."
+          else
+            echo "⚠️ Dispatch returned status $HTTP_STATUS"
+            if [ "$HTTP_STATUS" -ge 400 ]; then
+              exit 1
+            fi
+          fi

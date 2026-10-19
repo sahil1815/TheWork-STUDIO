@@ -50,7 +50,7 @@
 | **Authentication** | NextAuth v5 (Auth.js) | Credentials (`bcryptjs`) + Google OAuth + IANA timezone auto-sync |
 | **Styling** | Tailwind CSS + Lucide Icons | Responsive mobile-first design with dark mode support |
 | **Email Service** | Resend REST API | Free plan (3,000 emails/month, 100 emails/day max) |
-| **Cron Trigger** | Vercel Cron / GitHub Actions | 100% free automated 10-minute recurring execution |
+| **Cron Trigger** | GitHub Actions / cron-job.org | 100% free automated 10-minute recurring execution ($0 tier) |
 | **Testing** | Vitest | 93 passing unit & integration tests |
 
 ---
@@ -140,12 +140,17 @@ npm run build
 
 ## ⏰ Cron & Automated Reminders Setup
 
-The reminder dispatcher is located at `/api/cron/dispatch-reminders`. It can be triggered in production using either:
+The reminder dispatcher is located at `/api/cron/dispatch-reminders`. Since Vercel Hobby accounts restrict built-in Vercel Cron to once per day, use one of the following 100% free external triggers to run every 10 minutes:
 
-1. **Vercel Cron (Included)**:  
-   Configured in `vercel.json` to trigger every 10 minutes (`*/10 * * * *`). Automatically authenticates with Vercel headers.
-2. **GitHub Actions (Free Fallback)**:  
-   Configured in `.github/workflows/cron-reminders.yml` to trigger every 10 minutes. Add `APP_URL` and `CRON_SECRET` to your repository's GitHub Secrets.
+1. **GitHub Actions (Recommended - 100% Free)**:  
+   Configured in `.github/workflows/cron.yml` to trigger every 10 minutes (`*/10 * * * *`). Simply add two repository secrets in GitHub (**Settings** $\to$ **Secrets and variables** $\to$ **Actions**):
+   - `APP_URL`: Your Vercel domain (e.g., `https://the-work-studio.vercel.app`)
+   - `CRON_SECRET`: Your secure secret token matching `CRON_SECRET` on Vercel.
+
+2. **Free External Cron Service (e.g. cron-job.org)**:  
+   Create a free job at [cron-job.org](https://cron-job.org) targeting:  
+   `POST https://<your-vercel-domain>/api/cron/dispatch-reminders` with header `Authorization: Bearer <CRON_SECRET>` scheduled for every 10 minutes.
+
 3. **Manual Trigger (curl)**:
    ```bash
    curl -X POST "http://localhost:3000/api/cron/dispatch-reminders" \

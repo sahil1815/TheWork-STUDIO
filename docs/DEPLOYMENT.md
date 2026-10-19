@@ -66,23 +66,30 @@ npm run prisma:seed
 
 ---
 
-## 5. Verify Automated Cron Dispatcher
+## 5. Automated Cron Dispatcher ($0 Setup)
 
-Team Planner includes a `vercel.json` file that automatically registers a 10-minute cron job on Vercel:
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/dispatch-reminders",
-      "schedule": "*/10 * * * *"
-    }
-  ]
-}
-```
+The reminder dispatcher is located at `/api/cron/dispatch-reminders`.
 
-- When triggered by Vercel, the route automatically processes due reminders.
-- **Alternative Free Trigger (GitHub Actions)**:
-  If running on a standard personal GitHub account, the included workflow `.github/workflows/cron-reminders.yml` runs every 10 minutes for free. Simply add `APP_URL` (e.g. `https://your-app.vercel.app`) and `CRON_SECRET` to your GitHub Repository Secrets.
+> **Vercel Hobby Note:** Vercel Hobby accounts restrict native Vercel Cron to at most 1 run per day (`0 0 * * *`). Sub-daily schedules (like `*/10 * * * *`) trigger a deployment error:  
+> *"Hobby accounts are limited to daily cron jobs. Upgrade to the Pro plan to unlock all Cron Jobs features on Vercel."*  
+> To keep the project 100% free and allow clean deployments on Vercel Hobby, `vercel.json` has `crons` removed. Instead, use one of the two free 10-minute triggers below:
+
+### Option A: Free GitHub Actions Workflow (Recommended)
+This repository includes `.github/workflows/cron.yml` which triggers every 10 minutes (`*/10 * * * *`) completely free of charge.
+
+1. Go to your GitHub repository: **Settings** $\to$ **Secrets and variables** $\to$ **Actions**.
+2. Click **New repository secret** and add:
+   - `APP_URL`: Your full Vercel deployment URL (e.g., `https://the-work-studio.vercel.app`).
+   - `CRON_SECRET`: The same secret token configured in your Vercel environment variables.
+3. You can test it immediately by navigating to the **Actions** tab in GitHub $\to$ selecting **Dispatch Reminders Cron** $\to$ clicking **Run workflow**.
+
+### Option B: Free External Cron (cron-job.org)
+1. Sign up for a free account at [cron-job.org](https://cron-job.org).
+2. Create a new cron job:
+   - URL: `https://<your-vercel-domain>/api/cron/dispatch-reminders`
+   - Schedule: Every 10 minutes
+   - Request method: `POST`
+   - Headers: `Authorization: Bearer <CRON_SECRET>`
 
 - **Manual Verification**:
   ```bash
