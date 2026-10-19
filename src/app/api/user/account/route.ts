@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+
 export async function DELETE() {
   try {
     const session = await auth();
