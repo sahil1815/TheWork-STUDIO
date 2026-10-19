@@ -2,9 +2,69 @@
 
 import { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
-import { User, Mail, Globe, Trash2, AlertTriangle, CheckCircle } from "lucide-react";
+import { User, Mail, Globe, Trash2, AlertTriangle, CheckCircle, Sun, Moon, Laptop, Palette } from "lucide-react";
 import { ReminderSettingsForm } from "@/components/settings/reminder-settings-form";
 import { getReminderPreferences } from "@/actions/reminder-actions";
+import { useTheme } from "@/components/providers/theme-provider";
+
+function AppearanceSettingsCard() {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4 shadow-xs">
+      <div className="flex items-center gap-2">
+        <Palette className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+          Appearance & Theme
+        </h2>
+      </div>
+      <p className="text-sm text-slate-600 dark:text-slate-400">
+        Choose how Team Planner looks to you. Select a light or dark theme, or sync with your system preferences.
+      </p>
+
+      <div className="grid grid-cols-3 gap-3 pt-2">
+        <button
+          type="button"
+          onClick={() => setTheme("light")}
+          className={`flex flex-col items-center justify-center p-3.5 rounded-xl border transition ${
+            theme === "light"
+              ? "border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-600 font-semibold shadow-xs"
+              : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:border-slate-300"
+          }`}
+        >
+          <Sun className="h-5 w-5 mb-1.5 text-amber-500" />
+          <span className="text-xs">Light</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTheme("dark")}
+          className={`flex flex-col items-center justify-center p-3.5 rounded-xl border transition ${
+            theme === "dark"
+              ? "border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-400 font-semibold shadow-xs"
+              : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:border-slate-300"
+          }`}
+        >
+          <Moon className="h-5 w-5 mb-1.5 text-blue-400" />
+          <span className="text-xs">Dark</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTheme("system")}
+          className={`flex flex-col items-center justify-center p-3.5 rounded-xl border transition ${
+            theme === "system"
+              ? "border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-semibold shadow-xs"
+              : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:border-slate-300"
+          }`}
+        >
+          <Laptop className="h-5 w-5 mb-1.5 text-slate-500" />
+          <span className="text-xs">System</span>
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function AccountSettingsPage() {
   const { data: session, update } = useSession();
@@ -128,6 +188,9 @@ export default function AccountSettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Theme / Appearance Settings */}
+      <AppearanceSettingsCard />
 
       {/* Time Zone Settings (FR-02) */}
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 space-y-4">
