@@ -19,8 +19,10 @@ export default async function InviteAcceptancePage({
   const { token } = await params;
   const hashed = hashToken(token);
 
-  const invitation = await db.teamInvitation.findUnique({
-    where: { tokenHash: hashed },
+  const invitation = await db.teamInvitation.findFirst({
+    where: {
+      OR: [{ tokenHash: hashed }, { tokenHash: token }],
+    },
     include: {
       team: { select: { id: true, name: true } },
       invitedBy: { select: { name: true, email: true } },

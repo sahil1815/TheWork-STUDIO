@@ -60,7 +60,11 @@ export async function sendEmail({
   text,
 }: SendEmailOptions): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.EMAIL_FROM || "TheWork STUDIO <notifications@adorousfashion.store>";
+  let fromEmail = process.env.EMAIL_FROM || "TheWork STUDIO <notifications@adorousfashion.store>";
+  if (fromEmail.includes("<") && fromEmail.includes(">")) {
+    const address = fromEmail.substring(fromEmail.indexOf("<") + 1, fromEmail.indexOf(">")).trim();
+    fromEmail = `TheWork STUDIO <${address}>`;
+  }
   const toList = Array.isArray(to) ? to : [to];
 
   // If no API key or dummy key provided in development, simulate safely
@@ -233,3 +237,113 @@ export function renderReminderDigestHtml({
     </html>
   `;
 }
+
+/**
+ * Resolves the application base URL dynamically from request headers or environment variables
+ */
+export async function getBaseUrl(): Promise<string> {
+  try {
+    const { headers } = await import("next/headers");
+    const headerList = await headers();
+    const host = headerList.get("x-forwarded-host") || headerList.get("host");
+    const proto =
+      headerList.get("x-forwarded-proto") ||
+      (host?.includes("localhost") ? "http" : "https");
+    if (host) {
+      return `${proto}://${host}`;
+    }
+  } catch {
+    // Fallback if headers() is unavailable
+  }
+
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  }
+  if (process.env.NEXTAUTH_URL) {
+    return process.env.NEXTAUTH_URL.replace(/\/$/, "");
+  }
+  if (process.env.VERCEL_URL) {
+    const v = process.env.VERCEL_URL.replace(/\/$/, "");
+    return v.startsWith("http") ? v : `https://${v}`;
+  }
+  return "http://localhost:3000";
+}
+
+/**
+ * Generate clean, modern HTML for team invitation emails (FR-15, FR-16)
+ */
+export function renderTeamInvitationHtml({
+  teamName,
+  inviterName,
+  inviterEmail,
+  role,
+  inviteUrl,
+  expiresInDays = 7,
+}: {
+  teamName: string;
+  inviterName?: string | null;
+  inviterEmail?: string | null;
+  role: string;
+  inviteUrl: string;
+  expiresInDays?: number;
+}): string {
+  const inviterDisplay = inviterName
+    ? `${inviterName} (${inviterEmail || ""})`.trim()
+    : inviterEmail || "A team admin";
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Invitation to join ${teamName}</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f9fafb; margin: 0; padding: 24px; color: #111827; line-height: 1.5;">
+        <div style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+          <!-- Header -->
+          <div style="background-color: #2563eb; padding: 28px 24px; text-align: center; color: #ffffff;">
+            <h1 style="margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em;">TheWork STUDIO</h1>
+            <p style="margin: 6px 0 0 0; font-size: 13px; opacity: 0.9;">Team Collaboration & Workspace</p>
+          </div>
+
+          <!-- Body -->
+          <div style="padding: 32px 24px;">
+            <p style="font-size: 15px; color: #374151; margin-top: 0;">
+              Hello,
+            </p>
+            <p style="font-size: 15px; color: #4b5563; line-height: 1.6;">
+              <strong>${inviterDisplay}</strong> has invited you to join the team <strong style="color: #2563eb;">${teamName}</strong> on TheWork STUDIO as <strong>${role}</strong>.
+            </p>
+
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 24px 0;">
+              <div style="font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 8px;">TEAM INVITATION DETAILS</div>
+              <div style="font-size: 14px; color: #1e293b; margin-bottom: 6px;">👥 <strong>Team:</strong> ${teamName}</div>
+              <div style="font-size: 14px; color: #1e293b; margin-bottom: 6px;">🏷️ <strong>Assigned Role:</strong> <span style="display: inline-block; background-color: #dbeafe; color: #1d4ed8; font-weight: 600; font-size: 12px; padding: 2px 8px; border-radius: 12px;">${role}</span></div>
+              <div style="font-size: 12px; color: #94a3b8; margin-top: 8px;">⏳ This single-use invitation link expires in <strong>${expiresInDays} days</strong>.</div>
+            </div>
+
+            <!-- CTA Button -->
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${inviteUrl}" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-size: 14px; font-weight: 600; padding: 12px 28px; border-radius: 8px; text-decoration: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                Accept Invitation
+              </a>
+            </div>
+
+            <p style="font-size: 12px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">
+              If the button above doesn't work, copy and paste this link into your browser:<br>
+              <a href="${inviteUrl}" style="color: #2563eb; word-break: break-all;">${inviteUrl}</a>
+            </p>
+          </div>
+
+          <!-- Footer -->
+          <div style="background-color: #f9fafb; padding: 16px 24px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af;">
+            You received this email because an invitation was sent to this address from TheWork STUDIO.<br>
+            If you did not expect this invitation, you can safely ignore this email.
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+

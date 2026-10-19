@@ -19,6 +19,7 @@ import {
 import { Role, InvitationStatus, ProposalStatus } from "@prisma/client";
 import { addDays } from "date-fns";
 import { revalidatePath } from "next/cache";
+import { sendEmail, renderTeamInvitationHtml, getBaseUrl } from "@/lib/email";
 
 async function getAuthUserId(): Promise<string> {
   const session = await auth();
@@ -34,7 +35,7 @@ async function getAuthUserId(): Promise<string> {
 async function getUserMembership(teamId: string, userId: string) {
   return db.teamMember.findUnique({
     where: { teamId_userId: { teamId, userId } },
-    include: { team: true },
+    include: { team: true, user: true },
   });
 }
 
@@ -338,6 +339,8 @@ export async function sendTeamInvitation(teamId: string, rawInput: InviteMemberI
       return { success: false, error: "This person is already a member of the team." };
     }
 
+    const isMasterAdmin = membership!.role === Role.OWNER;
+
     // 2. Prevent duplicate pending/approved invitations for the same email and team (FR-16)
     const existingInvite = await db.teamInvitation.findFirst({
       where: {
@@ -346,20 +349,72 @@ export async function sendTeamInvitation(teamId: string, rawInput: InviteMemberI
         status: { in: [InvitationStatus.PENDING_APPROVAL, InvitationStatus.APPROVED] },
         expiresAt: { gt: new Date() },
       },
+      include: {
+        team: { select: { id: true, name: true } },
+        invitedBy: { select: { name: true, email: true } },
+      },
     });
-
-    if (existingInvite) {
-      return {
-        success: false,
-        error: "An active invitation for this email already exists for this team.",
-      };
-    }
 
     const plainToken = generateSecureToken(32);
     const tokenHash = hashToken(plainToken);
     const expiresAt = addDays(new Date(), 7); // Default 7-day expiration (Assumption 5)
 
-    const isMasterAdmin = membership!.role === Role.OWNER;
+    if (existingInvite) {
+      if (!isMasterAdmin) {
+        return {
+          success: false,
+          error: "An active invitation for this email already exists for this team.",
+        };
+      }
+
+      // If Master Admin generates an invite when one is already active, refresh it and re-send the email
+      const updated = await db.teamInvitation.update({
+        where: { id: existingInvite.id },
+        data: {
+          proposedRole: validated.proposedRole,
+          status: InvitationStatus.APPROVED,
+          approvedById: userId,
+          tokenHash,
+          expiresAt,
+        },
+        include: {
+          team: { select: { id: true, name: true } },
+          invitedBy: { select: { name: true, email: true } },
+        },
+      });
+
+      const baseUrl = await getBaseUrl();
+      const inviteUrl = `${baseUrl}/invite/${plainToken}`;
+
+      const emailHtml = renderTeamInvitationHtml({
+        teamName: updated.team.name,
+        inviterName: updated.invitedBy.name || membership?.user?.name,
+        inviterEmail: updated.invitedBy.email || membership?.user?.email,
+        role: updated.proposedRole,
+        inviteUrl,
+        expiresInDays: 7,
+      });
+
+      const emailResult = await sendEmail({
+        to: normalizedEmail,
+        subject: `Invitation to join ${updated.team.name} on TheWork STUDIO`,
+        html: emailHtml,
+        text: `You have been invited to join ${updated.team.name} as ${updated.proposedRole}.\n\nClick the link below to accept the invitation:\n${inviteUrl}\n\nThis invitation link expires in 7 days.`,
+      });
+
+      revalidatePath(`/teams/${teamId}`);
+
+      return {
+        success: true,
+        invitation: updated,
+        token: plainToken,
+        emailSent: emailResult.success,
+        message: emailResult.success
+          ? `Invitation email successfully sent to ${normalizedEmail}!`
+          : `Invitation generated and ready to share! (Email note: ${emailResult.error || "delivery error"}).`,
+      };
+    }
+
     const initialStatus = isMasterAdmin ? InvitationStatus.APPROVED : InvitationStatus.PENDING_APPROVAL;
 
     const invitation = await db.teamInvitation.create({
@@ -373,25 +428,60 @@ export async function sendTeamInvitation(teamId: string, rawInput: InviteMemberI
         tokenHash,
         expiresAt,
       },
+      include: {
+        team: { select: { id: true, name: true } },
+        invitedBy: { select: { name: true, email: true } },
+      },
     });
 
-    // If Admin invited, notify Master Admin for review
-    if (!isMasterAdmin) {
-      const teamOwner = await db.teamMember.findFirst({
-        where: { teamId, role: Role.OWNER },
+    if (isMasterAdmin) {
+      const baseUrl = await getBaseUrl();
+      const inviteUrl = `${baseUrl}/invite/${plainToken}`;
+
+      const emailHtml = renderTeamInvitationHtml({
+        teamName: invitation.team.name,
+        inviterName: invitation.invitedBy.name || membership?.user?.name,
+        inviterEmail: invitation.invitedBy.email || membership?.user?.email,
+        role: validated.proposedRole,
+        inviteUrl,
+        expiresInDays: 7,
       });
 
-      if (teamOwner) {
-        await db.notification.create({
-          data: {
-            userId: teamOwner.userId,
-            type: "INVITATION",
-            title: `Invitation Approval Requested: ${normalizedEmail}`,
-            message: `Admin invited ${normalizedEmail} as ${validated.proposedRole}. Master Admin approval required.`,
-            link: `/teams/${teamId}`,
-          },
-        });
-      }
+      const emailResult = await sendEmail({
+        to: normalizedEmail,
+        subject: `Invitation to join ${invitation.team.name} on TheWork STUDIO`,
+        html: emailHtml,
+        text: `You have been invited to join ${invitation.team.name} as ${validated.proposedRole}.\n\nClick the link below to accept the invitation:\n${inviteUrl}\n\nThis invitation link expires in 7 days.`,
+      });
+
+      revalidatePath(`/teams/${teamId}`);
+
+      return {
+        success: true,
+        invitation,
+        token: plainToken,
+        emailSent: emailResult.success,
+        message: emailResult.success
+          ? `Invitation email sent to ${normalizedEmail}!`
+          : `Invitation approved and ready to share! (Email note: ${emailResult.error || "delivery delayed"}).`,
+      };
+    }
+
+    // If Admin invited, notify Master Admin for review
+    const teamOwner = await db.teamMember.findFirst({
+      where: { teamId, role: Role.OWNER },
+    });
+
+    if (teamOwner) {
+      await db.notification.create({
+        data: {
+          userId: teamOwner.userId,
+          type: "INVITATION",
+          title: `Invitation Approval Requested: ${normalizedEmail}`,
+          message: `Admin invited ${normalizedEmail} as ${validated.proposedRole}. Master Admin approval required.`,
+          link: `/teams/${teamId}`,
+        },
+      });
     }
 
     revalidatePath(`/teams/${teamId}`);
@@ -399,10 +489,9 @@ export async function sendTeamInvitation(teamId: string, rawInput: InviteMemberI
     return {
       success: true,
       invitation,
-      token: isMasterAdmin ? plainToken : null,
-      message: isMasterAdmin
-        ? "Invitation approved and ready to share!"
-        : "Invitation submitted for Master Admin approval.",
+      token: null,
+      emailSent: false,
+      message: "Invitation submitted for Master Admin approval.",
     };
   } catch (error: unknown) {
     console.error("Invite error:", error);
@@ -458,6 +547,29 @@ export async function reviewInvitation(
         tokenHash, // Refresh token hash on approval
         expiresAt: addDays(new Date(), 7),
       },
+      include: {
+        team: { select: { id: true, name: true } },
+        invitedBy: { select: { name: true, email: true } },
+      },
+    });
+
+    const baseUrl = await getBaseUrl();
+    const inviteUrl = `${baseUrl}/invite/${plainToken}`;
+
+    const emailHtml = renderTeamInvitationHtml({
+      teamName: updated.team.name,
+      inviterName: updated.invitedBy.name,
+      inviterEmail: updated.invitedBy.email,
+      role: updated.proposedRole,
+      inviteUrl,
+      expiresInDays: 7,
+    });
+
+    const emailResult = await sendEmail({
+      to: updated.email,
+      subject: `Invitation to join ${updated.team.name} on TheWork STUDIO`,
+      html: emailHtml,
+      text: `You have been invited to join ${updated.team.name} as ${updated.proposedRole}.\n\nClick the link below to accept the invitation:\n${inviteUrl}\n\nThis invitation link expires in 7 days.`,
     });
 
     revalidatePath(`/teams/${invitation.teamId}`);
@@ -465,10 +577,92 @@ export async function reviewInvitation(
       success: true,
       invitation: updated,
       token: plainToken,
-      message: "Invitation approved successfully.",
+      emailSent: emailResult.success,
+      message: emailResult.success
+        ? `Invitation approved and email sent to ${updated.email}!`
+        : `Invitation approved! (Email note: ${emailResult.error || "delivery delayed"}).`,
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to review invitation";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Resend an invitation email (FR-16: Master Admin only)
+ */
+export async function resendTeamInvitation(teamId: string, invitationId: string) {
+  try {
+    const userId = await getAuthUserId();
+    const membership = await getUserMembership(teamId, userId);
+
+    if (!can(membership?.role, "SEND_INVITATION")) {
+      return { success: false, error: "You do not have permission to resend invitations." };
+    }
+
+    const invitation = await db.teamInvitation.findUnique({
+      where: { id: invitationId },
+      include: {
+        team: { select: { id: true, name: true } },
+        invitedBy: { select: { name: true, email: true } },
+      },
+    });
+
+    if (!invitation || invitation.teamId !== teamId) {
+      return { success: false, error: "Invitation not found." };
+    }
+
+    if (invitation.status !== InvitationStatus.APPROVED) {
+      return { success: false, error: "Only approved invitations can be sent via email." };
+    }
+
+    const plainToken = generateSecureToken(32);
+    const tokenHash = hashToken(plainToken);
+    const expiresAt = addDays(new Date(), 7);
+
+    const updated = await db.teamInvitation.update({
+      where: { id: invitationId },
+      data: {
+        tokenHash,
+        expiresAt,
+      },
+      include: {
+        team: { select: { id: true, name: true } },
+        invitedBy: { select: { name: true, email: true } },
+      },
+    });
+
+    const baseUrl = await getBaseUrl();
+    const inviteUrl = `${baseUrl}/invite/${plainToken}`;
+
+    const emailHtml = renderTeamInvitationHtml({
+      teamName: updated.team.name,
+      inviterName: updated.invitedBy.name || membership?.user?.name,
+      inviterEmail: updated.invitedBy.email || membership?.user?.email,
+      role: updated.proposedRole,
+      inviteUrl,
+      expiresInDays: 7,
+    });
+
+    const emailResult = await sendEmail({
+      to: updated.email,
+      subject: `Invitation to join ${updated.team.name} on TheWork STUDIO`,
+      html: emailHtml,
+      text: `You have been invited to join ${updated.team.name} as ${updated.proposedRole}.\n\nClick the link below to accept the invitation:\n${inviteUrl}\n\nThis invitation link expires in 7 days.`,
+    });
+
+    revalidatePath(`/teams/${teamId}`);
+
+    return {
+      success: true,
+      token: plainToken,
+      emailSent: emailResult.success,
+      message: emailResult.success
+        ? `Invitation email successfully sent to ${updated.email}!`
+        : `New invite link generated, but email sending failed: ${emailResult.error || "delivery error"}`,
+    };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to resend invitation";
     return { success: false, error: message };
   }
 }
@@ -511,8 +705,10 @@ export async function acceptTeamInvitation(plainToken: string) {
     const userId = await getAuthUserId();
     const hashed = hashToken(plainToken);
 
-    const invitation = await db.teamInvitation.findUnique({
-      where: { tokenHash: hashed },
+    const invitation = await db.teamInvitation.findFirst({
+      where: {
+        OR: [{ tokenHash: hashed }, { tokenHash: plainToken }],
+      },
       include: { team: true },
     });
 

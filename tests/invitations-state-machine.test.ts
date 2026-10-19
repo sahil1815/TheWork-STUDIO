@@ -121,4 +121,42 @@ describe("Phase 3: Invitation State Machine & Security Tests (FR-14, FR-15, FR-1
       expect(result.error).toContain("already accepted");
     });
   });
+
+  describe("Invitation Email Template (FR-15, FR-16)", () => {
+    it("should render complete HTML with team name, role, inviter, and secure invite link", async () => {
+      const { renderTeamInvitationHtml } = await import("@/lib/email");
+
+      const html = renderTeamInvitationHtml({
+        teamName: "Adorous CORE",
+        inviterName: "Sahil",
+        inviterEmail: "sahil@example.com",
+        role: "ADMIN",
+        inviteUrl: "https://thework-studio.vercel.app/invite/abc123token",
+        expiresInDays: 7,
+      });
+
+      expect(html).toContain("Adorous CORE");
+      expect(html).toContain("Sahil");
+      expect(html).toContain("ADMIN");
+      expect(html).toContain("https://thework-studio.vercel.app/invite/abc123token");
+      expect(html).toContain("7 days");
+      expect(html).toContain("Accept Invitation");
+    });
+
+    it("should fallback gracefully if inviterName is not present", async () => {
+      const { renderTeamInvitationHtml } = await import("@/lib/email");
+
+      const html = renderTeamInvitationHtml({
+        teamName: "Adorous CORE",
+        inviterEmail: "admin@example.com",
+        role: "MEMBER",
+        inviteUrl: "https://thework-studio.vercel.app/invite/sample",
+      });
+
+      expect(html).toContain("admin@example.com");
+      expect(html).toContain("MEMBER");
+      expect(html).toContain("https://thework-studio.vercel.app/invite/sample");
+    });
+  });
 });
+

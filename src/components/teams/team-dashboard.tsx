@@ -14,6 +14,7 @@ import {
   sendTeamInvitation,
   reviewInvitation,
   revokeInvitation,
+  resendTeamInvitation,
 } from "@/actions/team-actions";
 import {
   Users,
@@ -55,6 +56,7 @@ export function TeamDashboard({ team, currentUserId }: TeamDashboardProps) {
   const [inviteRole, setInviteRole] = useState<Exclude<Role, "OWNER">>(Role.MEMBER);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteResult, setInviteResult] = useState<{ url?: string; message: string } | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const [proposeModalOpen, setProposeModalOpen] = useState(false);
   const [proposeRecipientId, setProposeRecipientId] = useState<string | undefined>(undefined);
 
@@ -79,7 +81,7 @@ export function TeamDashboard({ team, currentUserId }: TeamDashboardProps) {
     if (res.success) {
       if (res.token) {
         const url = `${window.location.origin}/invite/${res.token}`;
-        setInviteResult({ url, message: res.message || "Invitation generated!" });
+        setInviteResult({ url, message: res.message || "Invitation generated and sent via email!" });
       } else {
         setInviteResult({ message: res.message || "Invitation submitted for Master Admin approval." });
       }
@@ -91,13 +93,31 @@ export function TeamDashboard({ team, currentUserId }: TeamDashboardProps) {
     setInviteLoading(false);
   };
 
+  // Resend Invitation
+  const handleResendInvite = async (invitationId: string) => {
+    setResendingId(invitationId);
+    const res = await resendTeamInvitation(team.id, invitationId);
+    if (res.success) {
+      if (res.token) {
+        const url = `${window.location.origin}/invite/${res.token}`;
+        alert(`${res.message}\n\nInvite link: ${url}`);
+      } else {
+        alert(res.message);
+      }
+      router.refresh();
+    } else {
+      alert(res.error || "Failed to resend invitation");
+    }
+    setResendingId(null);
+  };
+
   // Review Invitation (Approve / Reject)
   const handleReviewInvite = async (invitationId: string, decision: "APPROVE" | "REJECT", finalRole?: Role) => {
     const res = await reviewInvitation(invitationId, decision, finalRole);
     if (res.success) {
       if (res.token) {
         const url = `${window.location.origin}/invite/${res.token}`;
-        alert(`Approved! Share this invite link: ${url}`);
+        alert(`Approved! Invitation email sent.\nShare link: ${url}`);
       }
       router.refresh();
     } else {
@@ -500,12 +520,22 @@ export function TeamDashboard({ team, currentUserId }: TeamDashboardProps) {
 
                     <div className="flex items-center gap-2">
                       {isOwner && (
-                        <button
-                          onClick={() => handleRevokeInvite(invite.id)}
-                          className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition"
-                        >
-                          Revoke
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleResendInvite(invite.id)}
+                            disabled={resendingId === invite.id}
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 px-2.5 py-1 rounded bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition disabled:opacity-50 font-medium"
+                          >
+                            <Mail className="h-3 w-3" />
+                            <span>{resendingId === invite.id ? "Sending..." : "Resend Email"}</span>
+                          </button>
+                          <button
+                            onClick={() => handleRevokeInvite(invite.id)}
+                            className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition"
+                          >
+                            Revoke
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -705,7 +735,7 @@ export function TeamDashboard({ team, currentUserId }: TeamDashboardProps) {
                     disabled={inviteLoading}
                     className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                   >
-                    {inviteLoading ? "Sending..." : isOwner ? "Generate Invitation" : "Submit for Approval"}
+                    {inviteLoading ? "Sending..." : isOwner ? "Generate & Send Invitation" : "Submit for Approval"}
                   </button>
                 </div>
               </form>
