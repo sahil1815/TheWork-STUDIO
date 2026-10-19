@@ -58,7 +58,7 @@ function SignInForm() {
           Welcome back
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-          Sign in to access your Team Planner workspace
+          Sign in to access your TheWork STUDIO workspace
         </p>
       </div>
 

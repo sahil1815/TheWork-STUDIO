@@ -1,8 +1,8 @@
-# Team Planner — System Architecture & Technical Specification
+# TheWork STUDIO — System Architecture & Technical Specification
 
 ## 1. High-Level Architecture Overview
 
-Team Planner is built on the **Next.js App Router** full-stack architecture running on Node.js/Edge environments, backed by a relational **PostgreSQL** database accessed via **Prisma ORM**, styled with **Tailwind CSS**, and utilizing the **Resend API** for email notification delivery.
+TheWork STUDIO is built on the **Next.js App Router** full-stack architecture running on Node.js/Edge environments, backed by a relational **PostgreSQL** database accessed via **Prisma ORM**, styled with **Tailwind CSS**, and utilizing the **Resend API** for email notification delivery.
 
 ```
 +-------------------------------------------------------------------------+

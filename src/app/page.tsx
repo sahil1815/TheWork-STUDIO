@@ -148,7 +148,7 @@ export default async function HomePage() {
               <span className="h-3 w-3 rounded-full bg-amber-400/80" />
               <span className="h-3 w-3 rounded-full bg-emerald-400/80" />
               <span className="ml-3 text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:inline">
-                Team Planner — Engineering Workspace
+                TheWork STUDIO — Engineering Workspace
               </span>
             </div>
             <div className="flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">

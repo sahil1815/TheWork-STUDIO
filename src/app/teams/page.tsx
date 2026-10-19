@@ -4,7 +4,7 @@ import { getUserTeams } from "@/actions/task-actions";
 import { TeamsList } from "@/components/teams/teams-list";
 
 export const metadata = {
-  title: "Teams — Team Planner",
+  title: "Teams — TheWork STUDIO",
   description: "View and manage your collaboration teams.",
 };
 

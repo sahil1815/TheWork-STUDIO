@@ -1,4 +1,4 @@
-# Team Planner 📅
+# TheWork STUDIO 📅
 
 > **Full-Stack Team Scheduling, Collaboration, and Notebook Web Application**  
 > Built with Next.js 16 (App Router), TypeScript, Tailwind CSS, Prisma ORM, PostgreSQL (Neon), NextAuth v5, and Resend.  
@@ -86,7 +86,7 @@ NEXTAUTH_SECRET="generate-a-secure-32-byte-secret"
 # Resend Email (Free tier: https://resend.com)
 # Leave as mock_resend_key to use built-in email simulation mode in development
 RESEND_API_KEY="mock_resend_key"
-EMAIL_FROM="Team Planner <onboarding@resend.dev>"
+EMAIL_FROM="TheWork STUDIO <notifications@adorousfashion.store>"
 DAILY_EMAIL_LIMIT="100"
 
 # Cron Security Secret (for /api/cron/dispatch-reminders)

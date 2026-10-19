@@ -4,7 +4,7 @@ import { getNotes, getAllUserTags } from "@/actions/note-actions";
 import { NotebookRoot } from "@/components/notebook/notebook-root";
 
 export const metadata = {
-  title: "Notebook — Team Planner",
+  title: "Notebook — TheWork STUDIO",
   description: "Personal rich-text notes with autosave, pinning, and tag organization.",
 };
 

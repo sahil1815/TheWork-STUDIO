@@ -40,14 +40,11 @@ export function Navbar() {
           <div className="flex items-center gap-8">
             <Link href="/" className="flex items-center gap-2.5 group">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 text-white font-extrabold text-sm shadow-md shadow-blue-500/25 group-hover:scale-105 transition-transform">
-                TP
+                TW
               </span>
               <div className="flex flex-col">
                 <span className="font-bold text-base tracking-tight text-slate-900 dark:text-slate-50 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                  Team Planner
-                </span>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium -mt-1 tracking-wider uppercase">
-                  Studio
+                  TheWork STUDIO
                 </span>
               </div>
             </Link>

@@ -19,7 +19,7 @@ function AppearanceSettingsCard() {
         </h2>
       </div>
       <p className="text-sm text-slate-600 dark:text-slate-400">
-        Choose how Team Planner looks to you. Select a light or dark theme, or sync with your system preferences.
+        Choose how TheWork STUDIO looks to you. Select a light or dark theme, or sync with your system preferences.
       </p>
 
       <div className="grid grid-cols-3 gap-3 pt-2">

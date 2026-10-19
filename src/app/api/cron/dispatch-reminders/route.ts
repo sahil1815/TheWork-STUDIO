@@ -140,8 +140,8 @@ async function handleDispatch(req: NextRequest) {
 
       const subject =
         uniqueTasks.length > 1
-          ? `[Team Planner] Reminder: You have ${uniqueTasks.length} tasks scheduled`
-          : `[Team Planner] Reminder: ${uniqueTasks[0].title}`;
+          ? `[TheWork STUDIO] Reminder: You have ${uniqueTasks.length} tasks scheduled`
+          : `[TheWork STUDIO] Reminder: ${uniqueTasks[0].title}`;
 
       const html = renderReminderDigestHtml({
         userName: user.name || user.email,

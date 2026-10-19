@@ -4,7 +4,7 @@ import { getCalendarTasks, getUserTeams } from "@/actions/task-actions";
 import { CalendarRoot } from "@/components/calendar/calendar-root";
 
 export const metadata = {
-  title: "Calendar — Team Planner",
+  title: "Calendar — TheWork STUDIO",
   description: "View and schedule personal and team tasks on an interactive calendar.",
 };
 

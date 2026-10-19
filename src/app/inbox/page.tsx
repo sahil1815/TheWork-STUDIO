@@ -4,7 +4,7 @@ import { getInboxData } from "@/actions/proposal-actions";
 import { InboxView } from "@/components/inbox/inbox-view";
 
 export const metadata = {
-  title: "Inbox — Team Planner",
+  title: "Inbox — TheWork STUDIO",
   description: "Review incoming and outgoing task proposals, invitations, and notifications.",
 };
 

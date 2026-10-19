@@ -60,7 +60,7 @@ export async function sendEmail({
   text,
 }: SendEmailOptions): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.EMAIL_FROM || "Team Planner <onboarding@resend.dev>";
+  const fromEmail = process.env.EMAIL_FROM || "TheWork STUDIO <notifications@adorousfashion.store>";
   const toList = Array.isArray(to) ? to : [to];
 
   // If no API key or dummy key provided in development, simulate safely
@@ -194,7 +194,7 @@ export function renderReminderDigestHtml({
         <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
           <!-- Header -->
           <div style="background-color: #2563eb; padding: 24px; text-align: center; color: #ffffff;">
-            <h1 style="margin: 0; font-size: 20px; font-weight: bold;">Team Planner</h1>
+            <h1 style="margin: 0; font-size: 20px; font-weight: bold;">TheWork STUDIO</h1>
             <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.9;">Upcoming Schedule & Reminders</p>
           </div>
 
@@ -225,7 +225,7 @@ export function renderReminderDigestHtml({
 
           <!-- Footer -->
           <div style="background-color: #f9fafb; padding: 16px 24px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af;">
-            You received this email because reminders are enabled for your Team Planner account.<br>
+            You received this email because reminders are enabled for your TheWork STUDIO account.<br>
             Manage your reminder settings in <a href="${appUrl}/settings/account" style="color: #2563eb; text-decoration: underline;">Account Settings</a>.
           </div>
         </div>

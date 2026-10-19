@@ -1,6 +1,6 @@
-# Team Planner — Official Glossary & Naming Reference
+# TheWork STUDIO — Official Glossary & Naming Reference
 
-This document serves as the single source of truth for all domain concepts, UI labels, database tables, TypeScript types, routes, and naming conventions throughout the Team Planner application.
+This document serves as the single source of truth for all domain concepts, UI labels, database tables, TypeScript types, routes, and naming conventions throughout the TheWork STUDIO application.
 
 ## 1. Domain Entities & Naming Matrix
 

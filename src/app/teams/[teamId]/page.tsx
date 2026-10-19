@@ -4,7 +4,7 @@ import { getTeamDetails } from "@/actions/team-actions";
 import { TeamDashboard } from "@/components/teams/team-dashboard";
 
 export const metadata = {
-  title: "Team Management — Team Planner",
+  title: "Team Management — TheWork STUDIO",
   description: "Manage team members, roles, and invitations.",
 };
 

@@ -7,7 +7,7 @@ import { AcceptInviteButton } from "./accept-invite-button";
 import { Users, AlertTriangle, ShieldCheck, LogIn, UserPlus } from "lucide-react";
 
 export const metadata = {
-  title: "Team Invitation — Team Planner",
+  title: "Team Invitation — TheWork STUDIO",
   description: "Accept an invitation to join a team.",
 };
 

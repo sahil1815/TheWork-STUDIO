@@ -1,6 +1,6 @@
 # Production Deployment Runbook ($0 / Month)
 
-This guide walks you through deploying **Team Planner** to production entirely within the **100% free tier** using **Vercel**, **Neon PostgreSQL**, and **Resend**.
+This guide walks you through deploying **TheWork STUDIO** to production entirely within the **100% free tier** using **Vercel**, **Neon PostgreSQL**, and **Resend**.
 
 ---
 
@@ -38,7 +38,7 @@ This guide walks you through deploying **Team Planner** to production entirely w
 | `NEXTAUTH_URL` | Full canonical URL of your deployed application | `https://your-app.vercel.app` |
 | `NEXTAUTH_SECRET` | 32-byte secure random string | `openssl rand -base64 32` |
 | `RESEND_API_KEY` | Resend API key | `re_123456789...` |
-| `EMAIL_FROM` | Verified sender email address | `Team Planner <reminders@yourdomain.com>` or `Team Planner <onboarding@resend.dev>` |
+| `EMAIL_FROM` | Verified sender email address | `TheWork STUDIO <notifications@adorousfashion.store>` |
 | `DAILY_EMAIL_LIMIT` | Maximum emails to dispatch per UTC day | `100` |
 | `CRON_SECRET` | Secret token protecting the cron dispatcher route | `openssl rand -hex 24` |
 

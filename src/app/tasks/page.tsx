@@ -4,7 +4,7 @@ import { getCalendarTasks, getUserTeams } from "@/actions/task-actions";
 import { TasksList } from "@/components/tasks/tasks-list";
 
 export const metadata = {
-  title: "Tasks — Team Planner",
+  title: "Tasks — TheWork STUDIO",
   description: "View and organize your scheduled tasks.",
 };
 

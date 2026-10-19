@@ -76,7 +76,7 @@ export default function SignUpPage() {
             Create an account
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-            Get started with your free Team Planner account
+            Get started with your free TheWork STUDIO account
           </p>
         </div>
 

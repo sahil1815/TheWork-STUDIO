@@ -6,7 +6,7 @@ import { Navbar } from "@/components/navbar";
 import { TimeZoneDetector } from "@/components/timezone-detector";
 
 export const metadata: Metadata = {
-  title: "Team Planner — High-Performance Scheduling & Collaborative Notebook",
+  title: "TheWork STUDIO — High-Performance Scheduling & Collaborative Notebook",
   description:
     "A unified workspace for shared team calendars, task proposals, rich Markdown notebooks, and automated email reminders.",
 };
