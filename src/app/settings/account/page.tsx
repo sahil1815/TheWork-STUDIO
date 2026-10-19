@@ -1,0 +1,214 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useSession, signOut } from "next-auth/react";
+import { User, Mail, Globe, Trash2, AlertTriangle, CheckCircle } from "lucide-react";
+import { ReminderSettingsForm } from "@/components/settings/reminder-settings-form";
+import { getReminderPreferences } from "@/actions/reminder-actions";
+
+export default function AccountSettingsPage() {
+  const { data: session, update } = useSession();
+
+  const [timeZone, setTimeZone] = useState(session?.user?.timeZone || "UTC");
+  const [savingTz, setSavingTz] = useState(false);
+  const [tzMessage, setTzMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [reminderPrefs, setReminderPrefs] = useState<{
+    enabled: boolean;
+    defaultOffsets: number[];
+  }>({ enabled: true, defaultOffsets: [4320, 1440, 0] });
+
+  useEffect(() => {
+    async function loadReminderPrefs() {
+      const prefs = await getReminderPreferences();
+      setReminderPrefs(prefs);
+    }
+    loadReminderPrefs();
+  }, []);
+
+  const handleUpdateTz = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingTz(true);
+    setTzMessage(null);
+
+    try {
+      const res = await fetch("/api/user/timezone", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timeZone }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setTzMessage({ type: "error", text: data.error || "Failed to update timezone" });
+      } else {
+        await update({ timeZone });
+        setTzMessage({ type: "success", text: "Timezone updated successfully" });
+      }
+    } catch {
+      setTzMessage({ type: "error", text: "Network error updating timezone" });
+    } finally {
+      setSavingTz(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      "Are you absolutely sure you want to delete your account? This action cannot be undone."
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const res = await fetch("/api/user/account", {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setDeleteError(data.error || "Failed to delete account");
+        setDeleting(false);
+      } else {
+        await signOut({ callbackUrl: "/sign-in" });
+      }
+    } catch {
+      setDeleteError("Network error while attempting account deletion");
+      setDeleting(false);
+    }
+  };
+
+  if (!session) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-zinc-500">Please sign in to access settings.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+          Account Settings
+        </h1>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          Manage your profile identity, timezone preferences, and account security.
+        </p>
+      </div>
+
+      {/* Profile Overview */}
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 space-y-4">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+          <User className="h-5 w-5 text-blue-600" />
+          <span>Profile Information</span>
+        </h2>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          <div>
+            <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
+              Display Name
+            </span>
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mt-1">
+              {session.user.name || "Not set"}
+            </p>
+          </div>
+          <div>
+            <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider flex items-center gap-1">
+              <Mail className="h-3.5 w-3.5" /> Email
+            </span>
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mt-1">
+              {session.user.email}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Time Zone Settings (FR-02) */}
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 space-y-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+              <Globe className="h-5 w-5 text-blue-600" />
+              <span>Time Zone Preference</span>
+            </h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+              All calendar tasks, proposal times, and email reminder calculations use this IANA time zone.
+            </p>
+          </div>
+        </div>
+
+        {tzMessage && (
+          <div
+            className={`flex items-center gap-2 rounded-lg p-3 text-sm ${
+              tzMessage.type === "success"
+                ? "bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-900"
+                : "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900"
+            }`}
+          >
+            {tzMessage.type === "success" ? (
+              <CheckCircle className="h-4 w-4 shrink-0" />
+            ) : (
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+            )}
+            <span>{tzMessage.text}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleUpdateTz} className="flex flex-col sm:flex-row gap-3 pt-2">
+          <input
+            type="text"
+            required
+            value={timeZone}
+            onChange={(e) => setTimeZone(e.target.value)}
+            placeholder="e.g. America/New_York or Asia/Dhaka"
+            className="flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+          />
+          <button
+            type="submit"
+            disabled={savingTz}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition"
+          >
+            {savingTz ? "Saving..." : "Save Timezone"}
+          </button>
+        </form>
+      </div>
+
+      {/* Email Reminders (FR-24, FR-25) */}
+      <ReminderSettingsForm initialPreferences={reminderPrefs} />
+
+      {/* Danger Zone: Account Deletion (FR-01) */}
+      <div className="rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50/50 dark:bg-red-950/20 p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-red-700 dark:text-red-400 flex items-center gap-2">
+            <Trash2 className="h-5 w-5" />
+            <span>Danger Zone</span>
+          </h2>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+            Permanently delete your personal tasks, private notes, and account data. If you are the Master Admin of any team, you must transfer ownership or delete the team before deleting your account.
+          </p>
+        </div>
+
+        {deleteError && (
+          <div className="flex items-center gap-2 rounded-lg bg-red-100 dark:bg-red-900/50 p-3 text-sm text-red-800 dark:text-red-200 border border-red-300 dark:border-red-800">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>{deleteError}</span>
+          </div>
+        )}
+
+        <button
+          onClick={handleDeleteAccount}
+          disabled={deleting}
+          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 transition"
+        >
+          {deleting ? "Deleting account..." : "Delete Account"}
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,354 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  GUEST
+}
+
+enum InvitationStatus {
+  PENDING_APPROVAL
+  APPROVED
+  ACCEPTED
+  REJECTED
+  REVOKED
+  EXPIRED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ProposalStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+  EXPIRED
+}
+
+enum NoteShareTargetType {
+  USER
+  TEAM
+}
+
+enum NotePermission {
+  VIEW
+  EDIT
+}
+
+enum ReminderJobStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+enum NotificationType {
+  INVITATION
+  TASK_PROPOSAL
+  SYSTEM
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  passwordHash  String?   @map("password_hash")
+  timeZone      String    @default("UTC") @map("time_zone")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  accounts               Account[]
+  sessions               Session[]
+  memberships            TeamMember[]
+  invitationsSent        TeamInvitation[]         @relation("InvitedBy")
+  invitationsApproved    TeamInvitation[]         @relation("ApprovedBy")
+  createdTasks           Task[]                   @relation("CreatedTasks")
+  assignedTasks          Task[]                   @relation("AssignedTasks")
+  proposalsSent          TaskProposal[]           @relation("ProposalsSent")
+  proposalsReceived      TaskProposal[]           @relation("ProposalsReceived")
+  notes                  Note[]
+  reminderPreference     ReminderPreference?
+  taskReminderOverrides  TaskReminderOverride[]
+  reminderJobs           ReminderJob[]
+  notifications          Notification[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  members     TeamMember[]
+  invitations TeamInvitation[]
+  tasks       Task[]
+  proposals   TaskProposal[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id       String   @id @default(cuid())
+  teamId   String   @map("team_id")
+  userId   String   @map("user_id")
+  role     Role     @default(MEMBER)
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@index([teamId])
+  @@map("team_members")
+}
+
+model TeamInvitation {
+  id           String           @id @default(cuid())
+  teamId       String           @map("team_id")
+  email        String
+  proposedRole Role             @default(MEMBER) @map("proposed_role")
+  invitedById  String           @map("invited_by_id")
+  status       InvitationStatus @default(PENDING_APPROVAL)
+  approvedById String?          @map("approved_by_id")
+  tokenHash    String           @unique @map("token_hash")
+  expiresAt    DateTime         @map("expires_at")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  team       Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  invitedBy  User  @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+  approvedBy User? @relation("ApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([teamId, email])
+  @@index([status])
+  @@map("team_invitations")
+}
+
+model Task {
+  id               String       @id @default(cuid())
+  title            String
+  date             DateTime     @db.Date
+  startTime        String?      @map("start_time")
+  endTime          String?      @map("end_time")
+  description      String?      @db.Text
+  status           TaskStatus   @default(TODO)
+  priority         TaskPriority @default(MEDIUM)
+  location         String?
+  color            String?
+  recurrenceRule   String?      @map("recurrence_rule")
+  teamId           String?      @map("team_id")
+  createdById      String       @map("created_by_id")
+  assigneeId       String?      @map("assignee_id")
+  sourceProposalId String?      @unique @map("source_proposal_id")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  team              Team?                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy         User                   @relation("CreatedTasks", fields: [createdById], references: [id], onDelete: Cascade)
+  assignee          User?                  @relation("AssignedTasks", fields: [assigneeId], references: [id], onDelete: SetNull)
+  sourceProposal    TaskProposal?          @relation("ResultingTask", fields: [sourceProposalId], references: [id], onDelete: SetNull)
+  reminderJobs      ReminderJob[]
+  reminderOverrides TaskReminderOverride[]
+
+  @@index([assigneeId, date])
+  @@index([teamId, date])
+  @@index([createdById])
+  @@map("tasks")
+}
+
+model TaskProposal {
+  id              String         @id @default(cuid())
+  teamId          String         @map("team_id")
+  proposerId      String         @map("proposer_id")
+  recipientId     String         @map("recipient_id")
+  title           String
+  date            DateTime       @db.Date
+  startTime       String?        @map("start_time")
+  endTime         String?        @map("end_time")
+  description     String?        @db.Text
+  priority        TaskPriority   @default(MEDIUM)
+  location        String?
+  color           String?
+  status          ProposalStatus @default(PENDING)
+  message         String?        @db.Text
+  resultingTaskId String?        @unique @map("resulting_task_id")
+  expiresAt       DateTime       @map("expires_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  team          Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  proposer      User  @relation("ProposalsSent", fields: [proposerId], references: [id], onDelete: Cascade)
+  recipient     User  @relation("ProposalsReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+  resultingTask Task? @relation("ResultingTask")
+
+  @@index([recipientId, status])
+  @@index([teamId])
+  @@map("task_proposals")
+}
+
+model Note {
+  id          String   @id @default(cuid())
+  authorId    String   @map("author_id")
+  title       String   @default("Untitled Note")
+  contentJson Json     @map("content_json")
+  contentText String   @db.Text @map("content_text")
+  pinned      Boolean  @default(false)
+  tags        String[] @default([])
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  author User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  shares NoteShare[]
+
+  @@index([authorId])
+  @@index([pinned])
+  @@map("notes")
+}
+
+model NoteShare {
+  id         String              @id @default(cuid())
+  noteId     String              @map("note_id")
+  targetType NoteShareTargetType @map("target_type")
+  targetId   String              @map("target_id")
+  permission NotePermission      @default(VIEW)
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, targetType, targetId])
+  @@index([targetType, targetId])
+  @@map("note_shares")
+}
+
+model ReminderPreference {
+  id             String   @id @default(cuid())
+  userId         String   @unique @map("user_id")
+  defaultOffsets Int[]    @default([4320, 1440, 0]) @map("default_offsets")
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("reminder_preferences")
+}
+
+model TaskReminderOverride {
+  id        String   @id @default(cuid())
+  taskId    String   @map("task_id")
+  userId    String   @map("user_id")
+  offsets   Int[]    @map("offsets")
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@map("task_reminder_overrides")
+}
+
+model ReminderJob {
+  id                String            @id @default(cuid())
+  taskId            String            @map("task_id")
+  userId            String            @map("user_id")
+  offsetMinutes     Int               @map("offset_minutes")
+  sendAt            DateTime          @map("send_at") @db.Timestamptz(6)
+  status            ReminderJobStatus @default(PENDING)
+  attempts          Int               @default(0)
+  sentAt            DateTime?         @map("sent_at") @db.Timestamptz(6)
+  error             String?           @db.Text
+  providerMessageId String?           @map("provider_message_id")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId, offsetMinutes])
+  @@index([status, sendAt])
+  @@map("reminder_jobs")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  link      String?
+  read      Boolean          @default(false)
+  data      Json?
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@map("notifications")
+}
