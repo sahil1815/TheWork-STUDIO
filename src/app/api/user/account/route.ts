@@ -5,11 +5,23 @@ import { Role } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    try {
+      const body = await request.json();
+      if (body?.confirmation && body.confirmation.trim().toLowerCase() !== "delete my account") {
+        return NextResponse.json(
+          { error: 'Please type "delete my account" to confirm.' },
+          { status: 400 }
+        );
+      }
+    } catch {
+      // Body is optional
     }
 
     const userId = session.user.id;
