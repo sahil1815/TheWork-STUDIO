@@ -19,7 +19,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // 1. Initial preference
     try {
-      const stored = localStorage.getItem("tp-theme") as Theme | null;
+      const stored = (localStorage.getItem("tw-theme") || localStorage.getItem("tp-theme")) as Theme | null;
       if (stored === "light" || stored === "dark" || stored === "system") {
         setThemeState(stored);
       }
@@ -68,7 +68,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
     try {
-      localStorage.setItem("tp-theme", newTheme);
+      localStorage.setItem("tw-theme", newTheme);
     } catch {
       // ignore
     }
