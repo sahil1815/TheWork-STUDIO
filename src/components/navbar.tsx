@@ -38,7 +38,7 @@ export function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
           {/* Brand */}
           <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-2.5 group">
+            <Link href={session ? "/calendar" : "/"} className="flex items-center gap-2.5 group">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 text-white font-extrabold text-sm shadow-md shadow-blue-500/25 group-hover:scale-105 transition-transform">
                 TW
               </span>

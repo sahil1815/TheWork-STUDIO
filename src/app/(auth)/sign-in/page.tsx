@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, Suspense } from "react";
-import { signIn } from "next-auth/react";
+import { useState, useEffect, Suspense } from "react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { LogIn, Key, Mail, AlertCircle, Sparkles } from "lucide-react";
@@ -10,11 +10,32 @@ function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/calendar";
+  const { data: session, status } = useSession();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace(callbackUrl);
+    }
+  }, [status, router, callbackUrl]);
+
+  if (status === "authenticated") {
+    return (
+      <div className="w-full max-w-md p-8 sm:p-9 text-center space-y-4 rounded-3xl border border-slate-200/90 dark:border-slate-800/90 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-2xl">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600">
+          <LogIn className="h-6 w-6 animate-pulse" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Already Signed In</h2>
+        <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+          You are already signed in as {session?.user?.name || session?.user?.email}. Redirecting to your workspace...
+        </p>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

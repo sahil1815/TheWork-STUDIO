@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { HeroCta, BottomCta, HomeAuthRedirect } from "@/components/home/home-cta";
 import {
   Calendar,
   Users,
@@ -15,6 +16,9 @@ import {
   Layers,
   Zap,
 } from "lucide-react";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function HomePage() {
   const session = await auth();
@@ -76,6 +80,7 @@ export default async function HomePage() {
 
   return (
     <div className="relative py-8 sm:py-16 space-y-20 sm:space-y-28 overflow-hidden">
+      <HomeAuthRedirect />
       {/* Ambient gradient glow in hero background */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 -z-10 w-[800px] max-w-full h-[450px] bg-gradient-to-b from-blue-500/15 via-indigo-500/10 to-transparent blur-3xl pointer-events-none opacity-80 dark:opacity-40" />
 
@@ -101,21 +106,7 @@ export default async function HomePage() {
         </p>
 
         {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 pt-2">
-          <Link
-            href="/sign-up"
-            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 px-7 py-3.5 text-base font-semibold text-white shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all hover:scale-[1.02]"
-          >
-            <span>Get Started Free</span>
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-          <Link
-            href="/sign-in"
-            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/90 px-6 py-3.5 text-base font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/90 transition-all hover:scale-[1.02] shadow-xs"
-          >
-            <span>Sign In to Workspace</span>
-          </Link>
-        </div>
+        <HeroCta />
 
         {/* Feature Highlights Pills */}
         <div className="pt-4 flex flex-wrap items-center justify-center gap-y-2 gap-x-6 text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -295,20 +286,7 @@ export default async function HomePage() {
               Sign up with any email or test immediately with pre-configured demo roles (Owner, Admin, Member, Guest) on the sign-in screen.
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-            <Link
-              href="/sign-up"
-              className="w-full sm:w-auto rounded-xl bg-blue-600 hover:bg-blue-700 px-6 py-3 text-sm font-semibold text-white shadow-md shadow-blue-500/25 transition-all hover:scale-105"
-            >
-              Create Free Account
-            </Link>
-            <Link
-              href="/sign-in"
-              className="w-full sm:w-auto rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs"
-            >
-              Explore Demo Accounts
-            </Link>
-          </div>
+          <BottomCta />
         </div>
       </section>
     </div>

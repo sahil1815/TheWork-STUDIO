@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { UserPlus, User, Mail, Key, Globe, AlertCircle } from "lucide-react";
 
 export default function SignUpPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -15,6 +16,12 @@ export default function SignUpPage() {
   const [timeZone, setTimeZone] = useState("UTC");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace("/calendar");
+    }
+  }, [status, router]);
 
   useEffect(() => {
     try {
@@ -64,6 +71,22 @@ export default function SignUpPage() {
       setLoading(false);
     }
   };
+
+  if (status === "authenticated") {
+    return (
+      <div className="flex min-h-[80vh] items-center justify-center py-6 px-4">
+        <div className="w-full max-w-md p-8 sm:p-9 text-center space-y-4 rounded-3xl border border-slate-200/90 dark:border-slate-800/90 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-2xl">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600">
+            <UserPlus className="h-6 w-6 animate-pulse" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Already Signed In</h2>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+            You are already signed in as {session?.user?.name || session?.user?.email}. Redirecting to your workspace...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[80vh] items-center justify-center py-6 px-4">
