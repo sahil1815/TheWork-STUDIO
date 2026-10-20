@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { taskSchema, rescheduleTaskSchema } from "@/lib/validations/task";
+import { taskSchema, rescheduleTaskSchema, batchTasksSchema } from "@/lib/validations/task";
 import {
   formatTaskTiming,
   getMonthDays,
@@ -123,6 +123,64 @@ describe("Phase 1: Tasks and Calendar Tests (FR-03 to FR-09)", () => {
         endTime: "10:00",
       });
       expect(invalid.success).toBe(false);
+    });
+
+    it("should accept scheduling multiple tasks on same or different dates, personal and team mixed", () => {
+      const batchInput = [
+        {
+          title: "Personal Morning Routine",
+          date: "2026-10-20",
+          startTime: "07:00",
+          endTime: "08:00",
+          teamId: null, // Personal task
+        },
+        {
+          title: "Team Standup",
+          date: "2026-10-20", // Same date
+          startTime: "09:30",
+          endTime: "10:00",
+          teamId: "team-eng-1", // Team task
+        },
+        {
+          title: "Client Presentation",
+          date: "2026-10-22", // Different date
+          startTime: "14:00",
+          endTime: "15:30",
+          teamId: "team-sales-2", // Different team task
+        },
+        {
+          title: "Personal Gym Workout",
+          date: "2026-10-22", // Different date, personal
+          startTime: "18:00",
+          teamId: null,
+        },
+      ];
+
+      const result = batchTasksSchema.safeParse(batchInput);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.length).toBe(4);
+        expect(result.data[0].teamId).toBeNull();
+        expect(result.data[1].teamId).toBe("team-eng-1");
+        expect(result.data[2].date).toBe("2026-10-22");
+        expect(result.data[3].startTime).toBe("18:00");
+      }
+    });
+
+    it("should reject batch if any task has invalid timing or missing title", () => {
+      const invalidBatch = [
+        {
+          title: "Valid Task",
+          date: "2026-10-20",
+        },
+        {
+          title: "", // Missing title
+          date: "2026-10-20",
+        },
+      ];
+
+      const result = batchTasksSchema.safeParse(invalidBatch);
+      expect(result.success).toBe(false);
     });
   });
 

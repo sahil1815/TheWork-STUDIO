@@ -2,10 +2,11 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { taskSchema, rescheduleTaskSchema, TaskInput, RescheduleTaskInput } from "@/lib/validations/task";
+import { taskSchema, rescheduleTaskSchema, batchTasksSchema, TaskInput, BatchTasksInput, RescheduleTaskInput } from "@/lib/validations/task";
 import { parseDateString, toDateString } from "@/lib/date-utils";
 import { revalidatePath } from "next/cache";
 import { Role, TaskStatus } from "@prisma/client";
+import { can } from "@/lib/permissions";
 import { syncTaskReminderJobs } from "@/lib/reminders";
 
 /**
@@ -80,6 +81,88 @@ export async function createPersonalTask(rawInput: TaskInput) {
   } catch (error: unknown) {
     console.error("Create task error:", error);
     const message = error instanceof Error ? error.message : "Failed to create task";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Create multiple tasks in batch (FR-03, FR-04, FR-05)
+ * Tasks can be on the same date or different dates, personal or for teams.
+ */
+export async function createBatchTasks(rawInputs: TaskInput[]) {
+  try {
+    const userId = await getAuthUserId();
+    if (!rawInputs || !Array.isArray(rawInputs) || rawInputs.length === 0) {
+      return { success: false, error: "At least one task is required." };
+    }
+
+    const validatedTasks = rawInputs.map((input, index) => {
+      const parsed = taskSchema.safeParse(input);
+      if (!parsed.success) {
+        const firstError = parsed.error.issues[0]?.message || "Invalid task data";
+        throw new Error(`Task #${index + 1}: ${firstError}`);
+      }
+      return parsed.data;
+    });
+
+    // Check permissions if any tasks have teamId
+    const teamTasks = validatedTasks.filter((t) => !!t.teamId);
+    if (teamTasks.length > 0) {
+      const uniqueTeamIds = Array.from(new Set(teamTasks.map((t) => t.teamId!)));
+      const memberships = await db.teamMember.findMany({
+        where: {
+          userId,
+          teamId: { in: uniqueTeamIds },
+        },
+      });
+      const membershipMap = new Map(memberships.map((m) => [m.teamId, m.role]));
+
+      for (let i = 0; i < validatedTasks.length; i++) {
+        const t = validatedTasks[i];
+        if (t.teamId) {
+          const role = membershipMap.get(t.teamId);
+          if (!role || !can(role, "CREATE_TEAM_TASK")) {
+            throw new Error(`Task #${i + 1}: You do not have permission to create tasks in this team.`);
+          }
+        }
+      }
+    }
+
+    const createdTasks = await db.$transaction(async (tx) => {
+      const list = [];
+      for (const t of validatedTasks) {
+        const taskDate = parseDateString(t.date);
+        const created = await tx.task.create({
+          data: {
+            title: t.title.trim(),
+            date: taskDate,
+            startTime: t.startTime && t.startTime.trim() !== "" ? t.startTime : null,
+            endTime: t.endTime && t.endTime.trim() !== "" ? t.endTime : null,
+            description: t.description?.trim() || null,
+            status: t.status,
+            priority: t.priority,
+            location: t.location?.trim() || null,
+            color: t.color || "#3b82f6",
+            createdById: userId,
+            assigneeId: userId,
+            teamId: t.teamId || null,
+          },
+        });
+        list.push(created);
+      }
+      return list;
+    });
+
+    for (const created of createdTasks) {
+      await syncTaskReminderJobs(created.id);
+    }
+
+    revalidatePath("/calendar");
+    revalidatePath("/tasks");
+    return { success: true, count: createdTasks.length, tasks: createdTasks };
+  } catch (error: unknown) {
+    console.error("Create batch tasks error:", error);
+    const message = error instanceof Error ? error.message : "Failed to create tasks";
     return { success: false, error: message };
   }
 }

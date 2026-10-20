@@ -7,7 +7,9 @@ import {
   createProposalSchema,
   respondProposalSchema,
   cancelProposalSchema,
+  batchProposalsSchema,
   CreateProposalInput,
+  BatchProposalsInput,
   RespondProposalInput,
 } from "@/lib/validations/proposal";
 import { parseDateString, toDateString } from "@/lib/date-utils";
@@ -107,6 +109,161 @@ export async function createTaskProposal(rawInput: CreateProposalInput) {
     console.error("Create proposal error:", error);
     const message = error instanceof Error ? error.message : "Failed to propose task";
     return { success: false, error: message };
+  }
+}
+
+/**
+ * Propose multiple tasks in batch (FR-17, FR-18, FR-19)
+ * Tasks can be on the same date or different dates, for same or different team members.
+ */
+export async function createBatchTaskProposals(rawInputs: CreateProposalInput[]) {
+  try {
+    const userId = await getAuthUserId();
+    if (!rawInputs || !Array.isArray(rawInputs) || rawInputs.length === 0) {
+      return { success: false, error: "At least one proposal is required." };
+    }
+
+    const validatedProposals = rawInputs.map((input, index) => {
+      const parsed = createProposalSchema.safeParse(input);
+      if (!parsed.success) {
+        const firstError = parsed.error.issues[0]?.message || "Invalid proposal data";
+        throw new Error(`Proposal #${index + 1}: ${firstError}`);
+      }
+      if (parsed.data.recipientId === userId) {
+        throw new Error(`Proposal #${index + 1}: You cannot propose a task to yourself. Create a regular task instead.`);
+      }
+      return parsed.data;
+    });
+
+    // Verify proposer permissions in all involved teams
+    const uniqueTeamIds = Array.from(new Set(validatedProposals.map((p) => p.teamId)));
+    const proposerMembers = await db.teamMember.findMany({
+      where: {
+        userId,
+        teamId: { in: uniqueTeamIds },
+      },
+    });
+    const proposerMemberMap = new Map(proposerMembers.map((m) => [m.teamId, m]));
+
+    for (let i = 0; i < validatedProposals.length; i++) {
+      const p = validatedProposals[i];
+      const member = proposerMemberMap.get(p.teamId);
+      if (!member || !can(member.role, "PROPOSE_TASK")) {
+        throw new Error(`Proposal #${i + 1}: You do not have permission to propose tasks in this team.`);
+      }
+    }
+
+    // Verify recipient memberships (must be in the specified team, cannot be GUEST)
+    for (let i = 0; i < validatedProposals.length; i++) {
+      const p = validatedProposals[i];
+      const recipientMember = await db.teamMember.findUnique({
+        where: { teamId_userId: { teamId: p.teamId, userId: p.recipientId } },
+        include: { user: { select: { name: true, email: true } } },
+      });
+
+      if (!recipientMember) {
+        throw new Error(`Proposal #${i + 1}: Recipient is not a member of this team.`);
+      }
+      if (recipientMember.role === Role.GUEST) {
+        throw new Error(`Proposal #${i + 1}: Tasks cannot be proposed to Guests (view-only role).`);
+      }
+    }
+
+    const expiresAt = addDays(new Date(), 14);
+
+    const createdProposals = await db.$transaction(async (tx) => {
+      const results = [];
+      for (const p of validatedProposals) {
+        const taskDate = parseDateString(p.date);
+        const created = await tx.taskProposal.create({
+          data: {
+            teamId: p.teamId,
+            proposerId: userId,
+            recipientId: p.recipientId,
+            title: p.title.trim(),
+            date: taskDate,
+            startTime: p.startTime && p.startTime.trim() !== "" ? p.startTime : null,
+            endTime: p.endTime && p.endTime.trim() !== "" ? p.endTime : null,
+            description: p.description?.trim() || null,
+            priority: p.priority,
+            location: p.location?.trim() || null,
+            color: p.color || "#8b5cf6",
+            message: p.message?.trim() || null,
+            status: ProposalStatus.PENDING,
+            expiresAt,
+          },
+          include: {
+            team: { select: { name: true } },
+            proposer: { select: { name: true, email: true } },
+          },
+        });
+
+        await tx.notification.create({
+          data: {
+            userId: p.recipientId,
+            type: "TASK_PROPOSAL",
+            title: `New Task Proposal from ${created.proposer.name || created.proposer.email}`,
+            message: `Proposed: "${created.title}" in team "${created.team.name}"`,
+            link: "/inbox",
+            data: { proposalId: created.id },
+          },
+        });
+
+        results.push(created);
+      }
+      return results;
+    });
+
+    revalidatePath("/inbox");
+    return { success: true, count: createdProposals.length, proposals: createdProposals };
+  } catch (error: unknown) {
+    console.error("Create batch proposals error:", error);
+    const message = error instanceof Error ? error.message : "Failed to propose tasks";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Get all teams where current user has permission to propose tasks (FR-19)
+ * with their active non-guest members.
+ */
+export async function getUserProposableTeams() {
+  try {
+    const userId = await getAuthUserId();
+    const memberships = await db.teamMember.findMany({
+      where: {
+        userId,
+        role: { in: [Role.OWNER, Role.ADMIN, Role.MEMBER] },
+      },
+      include: {
+        team: {
+          include: {
+            members: {
+              include: {
+                user: {
+                  select: { id: true, name: true, email: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return memberships.map((m) => ({
+      id: m.team.id,
+      name: m.team.name,
+      role: m.role,
+      members: m.team.members.map((tm) => ({
+        id: tm.id,
+        userId: tm.userId,
+        role: tm.role,
+        user: tm.user,
+      })),
+    }));
+  } catch (error) {
+    console.error("Get proposable teams error:", error);
+    return [];
   }
 }
 

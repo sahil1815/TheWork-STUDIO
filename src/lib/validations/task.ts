@@ -54,6 +54,9 @@ export const taskSchema = z
 
 export type TaskInput = z.infer<typeof taskSchema>;
 
+export const batchTasksSchema = z.array(taskSchema).min(1, "At least one task is required");
+export type BatchTasksInput = z.infer<typeof batchTasksSchema>;
+
 export const rescheduleTaskSchema = z
   .object({
     taskId: z.string().min(1),

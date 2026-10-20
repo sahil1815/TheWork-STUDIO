@@ -3,6 +3,7 @@ import {
   createProposalSchema,
   respondProposalSchema,
   cancelProposalSchema,
+  batchProposalsSchema,
 } from "@/lib/validations/proposal";
 import { can } from "@/lib/permissions";
 import { Role, ProposalStatus, TaskPriority } from "@prisma/client";
@@ -91,6 +92,68 @@ describe("Phase 4: Task Proposals & Inbox Engine (FR-17, FR-18, FR-19, FR-28)", 
         endTime: "14:00",
       });
       expect(invalidBefore.success).toBe(false);
+    });
+
+    it("should accept proposing multiple tasks on same or different dates to same or different members", () => {
+      const batchProposals = [
+        {
+          teamId: "team-eng",
+          recipientId: "user-alice",
+          title: "PR Review: Auth Flow",
+          date: "2026-10-20",
+          startTime: "10:00",
+          endTime: "11:00",
+          priority: TaskPriority.HIGH,
+        },
+        {
+          teamId: "team-eng",
+          recipientId: "user-alice",
+          title: "DB Migration Test",
+          date: "2026-10-20", // Same date, same member
+          startTime: "14:00",
+          endTime: "15:00",
+          priority: TaskPriority.MEDIUM,
+        },
+        {
+          teamId: "team-eng",
+          recipientId: "user-bob", // Different member
+          title: "Setup CI Runner",
+          date: "2026-10-23", // Different date
+          priority: TaskPriority.LOW,
+        },
+      ];
+
+      const result = batchProposalsSchema.safeParse(batchProposals);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.length).toBe(3);
+        expect(result.data[0].recipientId).toBe("user-alice");
+        expect(result.data[1].date).toBe("2026-10-20");
+        expect(result.data[2].date).toBe("2026-10-23");
+        expect(result.data[2].recipientId).toBe("user-bob");
+      }
+    });
+
+    it("should reject batch proposals if any proposal violates timing rules", () => {
+      const invalidBatch = [
+        {
+          teamId: "team-eng",
+          recipientId: "user-alice",
+          title: "Valid Proposal",
+          date: "2026-10-20",
+        },
+        {
+          teamId: "team-eng",
+          recipientId: "user-alice",
+          title: "Invalid Proposal",
+          date: "2026-10-20",
+          startTime: "16:00",
+          endTime: "15:00", // Invalid backward timing
+        },
+      ];
+
+      const result = batchProposalsSchema.safeParse(invalidBatch);
+      expect(result.success).toBe(false);
     });
   });
 

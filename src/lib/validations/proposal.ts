@@ -63,5 +63,8 @@ export const cancelProposalSchema = z.object({
 });
 
 export type CreateProposalInput = z.infer<typeof createProposalSchema>;
+
+export const batchProposalsSchema = z.array(createProposalSchema).min(1, "At least one proposal is required");
+export type BatchProposalsInput = z.infer<typeof batchProposalsSchema>;
 export type RespondProposalInput = z.infer<typeof respondProposalSchema>;
 export type CancelProposalInput = z.infer<typeof cancelProposalSchema>;
