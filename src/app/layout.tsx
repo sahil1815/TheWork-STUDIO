@@ -9,6 +9,10 @@ export const metadata: Metadata = {
   title: "TheWork STUDIO — High-Performance Scheduling & Collaborative Notebook",
   description:
     "A unified workspace for shared team calendars, task proposals, rich Markdown notebooks, and automated email reminders.",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: "/apple-icon",
+  },
 };
 
 export default function RootLayout({
