@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { HeroCta, BottomCta, HomeAuthRedirect } from "@/components/home/home-cta";
+import type { Metadata } from "next";
 import {
   Calendar,
   Users,
@@ -19,6 +20,12 @@ import {
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+export const metadata: Metadata = {
+  title: "TheWork STUDIO — High-Performance Scheduling & Collaborative Notebook",
+  description:
+    "A unified workspace for shared team calendars, task proposals, rich Markdown notebooks, and automated email reminders.",
+};
 
 export default async function HomePage() {
   const session = await auth();

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
+import { useEffect } from "react";
 import {
   Calendar,
   CheckSquare,
@@ -23,6 +24,12 @@ export function Navbar() {
   const pathname = usePathname();
   const { data: session, status } = useSession();
   const isLoading = status === "loading";
+
+  useEffect(() => {
+    if (typeof document !== "undefined" && document.title.includes("Team Planner")) {
+      document.title = document.title.replace(/Team Planner/g, "TheWork STUDIO");
+    }
+  }, []);
 
   const navLinks = [
     { href: "/calendar", label: "Calendar", icon: Calendar },
