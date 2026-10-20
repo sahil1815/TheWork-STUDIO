@@ -20,5 +20,11 @@ export default async function TasksPage() {
     getUserTeams(),
   ]);
 
-  return <TasksList initialTasks={initialTasks} teams={teams} />;
+  return (
+    <TasksList
+      initialTasks={initialTasks}
+      teams={teams}
+      currentUserId={session.user.id!}
+    />
+  );
 }

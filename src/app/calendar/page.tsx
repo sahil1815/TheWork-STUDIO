@@ -20,5 +20,11 @@ export default async function CalendarPage() {
     getUserTeams(),
   ]);
 
-  return <CalendarRoot initialTasks={initialTasks} teams={teams} />;
+  return (
+    <CalendarRoot
+      initialTasks={initialTasks}
+      teams={teams}
+      currentUserId={session.user.id!}
+    />
+  );
 }

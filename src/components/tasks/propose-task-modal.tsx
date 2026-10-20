@@ -66,6 +66,16 @@ interface ProposeTaskModalProps {
   teams: TeamOption[];
   initialTeamId?: string;
   initialRecipientId?: string;
+  initialData?: {
+    title?: string;
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+    teamId?: string;
+    description?: string;
+    priority?: TaskPriority;
+    location?: string;
+  };
   currentUserId: string;
 }
 
@@ -107,6 +117,7 @@ export function ProposeTaskModal({
   teams: initialTeams,
   initialTeamId,
   initialRecipientId,
+  initialData,
   currentUserId,
 }: ProposeTaskModalProps) {
   // Store all available teams where user is not GUEST
@@ -147,7 +158,7 @@ export function ProposeTaskModal({
     if (!isOpen) return;
 
     const baseTeamId =
-      initialTeamId || (allTeams.length > 0 ? allTeams[0].id : "");
+      initialData?.teamId || initialTeamId || (allTeams.length > 0 ? allTeams[0].id : "");
     const baseTeam = allTeams.find((t) => t.id === baseTeamId);
     const eligibleMembers =
       baseTeam?.members?.filter(
@@ -157,16 +168,23 @@ export function ProposeTaskModal({
     const baseRecipientId =
       initialRecipientId || (eligibleMembers.length > 0 ? eligibleMembers[0].userId : "");
 
-    setProposals([
-      createEmptyProposalDraft(
-        baseTeamId,
-        baseRecipientId,
-        new Date().toISOString().split("T")[0]
-      ),
-    ]);
+    const firstDraft = createEmptyProposalDraft(
+      baseTeamId,
+      baseRecipientId,
+      initialData?.date || new Date().toISOString().split("T")[0]
+    );
+
+    if (initialData?.title) firstDraft.title = initialData.title;
+    if (initialData?.startTime) firstDraft.startTime = initialData.startTime;
+    if (initialData?.endTime) firstDraft.endTime = initialData.endTime;
+    if (initialData?.description) firstDraft.description = initialData.description;
+    if (initialData?.priority) firstDraft.priority = initialData.priority;
+    if (initialData?.location) firstDraft.location = initialData.location;
+
+    setProposals([firstDraft]);
     setError(null);
     setSuccess(null);
-  }, [isOpen, initialTeamId, initialRecipientId, currentUserId, allTeams.length]);
+  }, [isOpen, initialTeamId, initialRecipientId, initialData, currentUserId, allTeams.length]);
 
   if (!isOpen) return null;
 

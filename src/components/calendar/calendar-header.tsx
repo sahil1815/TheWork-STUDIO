@@ -10,6 +10,7 @@ import {
   Filter,
   Calendar as CalendarIcon,
   Send,
+  Inbox,
 } from "lucide-react";
 
 interface TeamOption {
@@ -29,6 +30,7 @@ interface CalendarHeaderProps {
   onFilterChange: (filter: string) => void;
   teams: TeamOption[];
   onOpenNewTaskModal: () => void;
+  onOpenProposeTaskModal?: () => void;
 }
 
 export function CalendarHeader({
@@ -42,6 +44,7 @@ export function CalendarHeader({
   onFilterChange,
   teams,
   onOpenNewTaskModal,
+  onOpenProposeTaskModal,
 }: CalendarHeaderProps) {
   // Format header title based on view mode
   const getHeaderTitle = () => {
@@ -130,24 +133,35 @@ export function CalendarHeader({
           ))}
         </div>
 
-        {/* Proposals shortcut (FR-17, FR-18) */}
-        <Link
-          href="/inbox"
-          className="flex items-center gap-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 px-3 py-1.5 text-xs font-semibold text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition shadow-xs"
-          title="View Task Proposals & Inbox"
-        >
-          <Send className="h-3.5 w-3.5" />
-          <span>Proposals</span>
-        </Link>
+        {/* Propose Task button */}
+        {onOpenProposeTaskModal && (
+          <button
+            onClick={onOpenProposeTaskModal}
+            className="flex items-center gap-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50/70 dark:bg-purple-950/30 px-3 py-1.5 text-xs font-semibold text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition shadow-xs"
+            title="Propose a task to a team member"
+          >
+            <Send className="h-3.5 w-3.5" />
+            <span>Propose Task</span>
+          </button>
+        )}
 
         {/* New Task button */}
         <button
           onClick={onOpenNewTaskModal}
-          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 transition"
+          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
         >
           <Plus className="h-4 w-4" />
           <span>New Task</span>
         </button>
+
+        {/* Proposals shortcut link to Inbox */}
+        <Link
+          href="/inbox"
+          className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+          title="View Task Proposals & Inbox"
+        >
+          <Inbox className="h-4 w-4" />
+        </Link>
       </div>
     </div>
   );

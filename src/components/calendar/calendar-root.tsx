@@ -7,6 +7,7 @@ import { WeekView } from "./week-view";
 import { DayView } from "./day-view";
 import { AgendaView } from "./agenda-view";
 import { TaskModal } from "@/components/tasks/task-modal";
+import { ProposeTaskModal } from "@/components/tasks/propose-task-modal";
 import {
   toggleTaskComplete,
   rescheduleTask,
@@ -33,9 +34,10 @@ interface TeamOption {
 interface CalendarRootProps {
   initialTasks: any[];
   teams: TeamOption[];
+  currentUserId?: string;
 }
 
-export function CalendarRoot({ initialTasks, teams }: CalendarRootProps) {
+export function CalendarRoot({ initialTasks, teams, currentUserId }: CalendarRootProps) {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [filter, setFilter] = useState<string>("all");
@@ -47,9 +49,36 @@ export function CalendarRoot({ initialTasks, teams }: CalendarRootProps) {
   const [modalDefaultDate, setModalDefaultDate] = useState<string>(toDateString(new Date()));
   const [modalDefaultStartTime, setModalDefaultStartTime] = useState<string | undefined>(undefined);
 
+  // Propose Modal State
+  const [proposeModalOpen, setProposeModalOpen] = useState(false);
+  const [proposeInitialTeamId, setProposeInitialTeamId] = useState<string | undefined>(undefined);
+  const [proposeInitialData, setProposeInitialData] = useState<{
+    title?: string;
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+    teamId?: string;
+    description?: string;
+  } | undefined>(undefined);
+
   const refreshTasks = async (targetFilter?: string) => {
     const updated = await getCalendarTasks(targetFilter || filter);
     setTasks(updated);
+  };
+
+  const handleOpenProposeTask = (params?: {
+    teamId?: string;
+    title?: string;
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+    description?: string;
+  }) => {
+    setProposeInitialTeamId(
+      params?.teamId || (filter !== "all" && filter !== "personal" ? filter : undefined)
+    );
+    setProposeInitialData(params || { date: toDateString(currentDate) });
+    setProposeModalOpen(true);
   };
 
   // Navigation handlers
@@ -163,6 +192,7 @@ export function CalendarRoot({ initialTasks, teams }: CalendarRootProps) {
         onFilterChange={handleFilterChange}
         teams={teams}
         onOpenNewTaskModal={() => handleOpenNewTask()}
+        onOpenProposeTaskModal={currentUserId ? () => handleOpenProposeTask() : undefined}
       />
 
       {/* Main View Area */}
@@ -219,7 +249,21 @@ export function CalendarRoot({ initialTasks, teams }: CalendarRootProps) {
         defaultStartTime={modalDefaultStartTime}
         teams={teams}
         onTaskSaved={refreshTasks}
+        onOpenProposeTaskModal={currentUserId ? handleOpenProposeTask : undefined}
       />
+
+      {/* Propose Task Modal directly from Calendar */}
+      {proposeModalOpen && currentUserId && (
+        <ProposeTaskModal
+          isOpen={proposeModalOpen}
+          onClose={() => setProposeModalOpen(false)}
+          teams={teams.map((t) => ({ ...t, role: t.role as any }))}
+          initialTeamId={proposeInitialTeamId}
+          initialData={proposeInitialData}
+          currentUserId={currentUserId}
+          onSuccess={() => refreshTasks()}
+        />
+      )}
     </div>
   );
 }

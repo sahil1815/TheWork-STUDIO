@@ -5,6 +5,7 @@ import { TaskStatus, TaskPriority } from "@prisma/client";
 import { formatTaskTiming } from "@/lib/date-utils";
 import { format, parseISO } from "date-fns";
 import { TaskModal } from "./task-modal";
+import { ProposeTaskModal } from "./propose-task-modal";
 import { toggleTaskComplete, getCalendarTasks, deleteTask } from "@/actions/task-actions";
 import {
   Check,
@@ -18,6 +19,7 @@ import {
   Trash2,
   Edit2,
   Filter,
+  Send,
 } from "lucide-react";
 
 interface TeamOption {
@@ -29,9 +31,10 @@ interface TeamOption {
 interface TasksListProps {
   initialTasks: any[];
   teams: TeamOption[];
+  currentUserId?: string;
 }
 
-export function TasksList({ initialTasks, teams }: TasksListProps) {
+export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps) {
   const [tasks, setTasks] = useState<any[]>(initialTasks);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
@@ -41,6 +44,17 @@ export function TasksList({ initialTasks, teams }: TasksListProps) {
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any | null>(null);
+
+  // Propose Modal State
+  const [proposeModalOpen, setProposeModalOpen] = useState(false);
+  const [proposeInitialData, setProposeInitialData] = useState<{
+    title?: string;
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+    teamId?: string;
+    description?: string;
+  } | undefined>(undefined);
 
   const refreshTasks = async () => {
     const updated = await getCalendarTasks(teamFilter === "ALL" ? "all" : teamFilter);
@@ -103,16 +117,32 @@ export function TasksList({ initialTasks, teams }: TasksListProps) {
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setSelectedTask(null);
-            setModalOpen(true);
-          }}
-          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition"
-        >
-          <Plus className="h-4 w-4" />
-          <span>New Task</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {currentUserId && (
+            <button
+              onClick={() => {
+                setProposeInitialData(undefined);
+                setProposeModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 px-3.5 py-2 text-sm font-semibold text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 transition shadow-xs"
+              title="Propose a task to a teammate"
+            >
+              <Send className="h-4 w-4" />
+              <span>Propose Task</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => {
+              setSelectedTask(null);
+              setModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition"
+          >
+            <Plus className="h-4 w-4" />
+            <span>New Task</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter Controls Bar */}
@@ -314,7 +344,27 @@ export function TasksList({ initialTasks, teams }: TasksListProps) {
         taskToEdit={selectedTask}
         teams={teams}
         onTaskSaved={refreshTasks}
+        onOpenProposeTaskModal={
+          currentUserId
+            ? (data) => {
+                setProposeInitialData(data);
+                setProposeModalOpen(true);
+              }
+            : undefined
+        }
       />
+
+      {/* Propose Task Modal */}
+      {proposeModalOpen && currentUserId && (
+        <ProposeTaskModal
+          isOpen={proposeModalOpen}
+          onClose={() => setProposeModalOpen(false)}
+          teams={teams.map((t) => ({ ...t, role: t.role as any }))}
+          initialData={proposeInitialData}
+          currentUserId={currentUserId}
+          onSuccess={() => refreshTasks()}
+        />
+      )}
     </div>
   );
 }

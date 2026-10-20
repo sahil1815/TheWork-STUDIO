@@ -19,6 +19,7 @@ import {
   ChevronUp,
   Layers,
   Users,
+  Send,
 } from "lucide-react";
 
 interface TeamOption {
@@ -35,6 +36,14 @@ interface TaskModalProps {
   defaultStartTime?: string;
   teams?: TeamOption[];
   onTaskSaved?: () => void;
+  onOpenProposeTaskModal?: (prefilledData?: {
+    title?: string;
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+    teamId?: string;
+    description?: string;
+  }) => void;
 }
 
 export interface TaskDraft {
@@ -86,6 +95,7 @@ export function TaskModal({
   defaultStartTime,
   teams = [],
   onTaskSaved,
+  onOpenProposeTaskModal,
 }: TaskModalProps) {
   const isEditing = !!taskToEdit;
 
@@ -354,12 +364,36 @@ export function TaskModal({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {!isEditing && onOpenProposeTaskModal && (
+              <button
+                type="button"
+                onClick={() => {
+                  const firstTask = tasks[0];
+                  onClose();
+                  onOpenProposeTaskModal({
+                    title: firstTask?.title,
+                    date: firstTask?.date,
+                    startTime: firstTask?.startTime,
+                    endTime: firstTask?.endTime,
+                    teamId: firstTask?.teamId,
+                    description: firstTask?.description,
+                  });
+                }}
+                className="flex items-center gap-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 px-2.5 py-1 text-xs font-semibold text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 transition shadow-xs"
+                title="Propose a task to a team member"
+              >
+                <Send className="h-3 w-3" />
+                <span className="hidden sm:inline">Propose Task</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable Form Body */}
@@ -758,9 +792,32 @@ export function TaskModal({
                             </div>
                             {teams.length > 0 && (
                               <div>
-                                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1">
-                                  Team Assignment
-                                </label>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
+                                    Team Assignment
+                                  </label>
+                                  {onOpenProposeTaskModal && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        onClose();
+                                        onOpenProposeTaskModal({
+                                          title: task.title,
+                                          date: task.date,
+                                          startTime: task.startTime,
+                                          endTime: task.endTime,
+                                          teamId: task.teamId,
+                                          description: task.description,
+                                        });
+                                      }}
+                                      className="text-[11px] text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 font-medium"
+                                      title="Propose this task to a teammate instead of yourself"
+                                    >
+                                      <Send className="h-2.5 w-2.5" />
+                                      <span>Propose to teammate instead</span>
+                                    </button>
+                                  )}
+                                </div>
                                 <select
                                   value={task.teamId}
                                   onChange={(e) =>
