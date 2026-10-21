@@ -66,16 +66,27 @@ export function MonthView({
 
   return (
     <div className="flex flex-col rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-sm">
-      {/* Weekday headers */}
-      <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-center text-xs font-semibold text-zinc-600 dark:text-zinc-400 py-2.5">
-        {WEEKDAYS.map((day) => (
-          <div key={day}>{day}</div>
-        ))}
+      {/* Mobile Horizontal Scroll Helper Banner */}
+      <div className="sm:hidden flex items-center justify-between px-3 py-1.5 bg-zinc-50/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 text-[11px] text-zinc-500">
+        <span>Swipe horizontally to view full calendar</span>
+        <span className="font-mono text-[10px] text-blue-600 dark:text-blue-400 font-semibold">Swipe ↔</span>
       </div>
 
-      {/* Days grid */}
-      <div className="grid grid-cols-7 auto-rows-[minmax(110px,1fr)] divide-x divide-y divide-zinc-200 dark:divide-zinc-800 border-b border-zinc-200 dark:border-zinc-800">
-        {days.map((day) => {
+      <div
+        className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700"
+        style={{ WebkitOverflowScrolling: "touch" }}
+      >
+        <div className="w-full">
+          {/* Weekday headers */}
+          <div className="grid grid-cols-[repeat(7,minmax(110px,1fr))] border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-center text-xs font-semibold text-zinc-600 dark:text-zinc-400 py-2.5">
+            {WEEKDAYS.map((day) => (
+              <div key={day}>{day}</div>
+            ))}
+          </div>
+
+          {/* Days grid */}
+          <div className="grid grid-cols-[repeat(7,minmax(110px,1fr))] auto-rows-[minmax(110px,1fr)] divide-x divide-y divide-zinc-200 dark:divide-zinc-800 border-b border-zinc-200 dark:border-zinc-800">
+            {days.map((day) => {
           const dateStr = toDateString(day);
           const dayTasks = tasksByDate[dateStr] || [];
           const isCurrentMonth = isSameMonth(day, currentDate);
@@ -171,5 +182,7 @@ export function MonthView({
         })}
       </div>
     </div>
+  </div>
+</div>
   );
 }
