@@ -308,4 +308,63 @@ describe("Phase 1: Tasks and Calendar Tests (FR-03 to FR-09)", () => {
       expect(resolveView("day", "")).toBe("day");
     });
   });
+
+  describe("Dynamic Calendar Timestamp Row Elimination (Week & Day Views)", () => {
+    const extractActiveHours = (tasks: Array<{ startTime?: string | null }>) => {
+      const timedTasks = tasks.filter((t) => !!t.startTime);
+      return Array.from(
+        new Set(
+          timedTasks.map((t) => {
+            const h = parseInt(t.startTime!.split(":")[0], 10);
+            return `${String(h).padStart(2, "0")}:00`;
+          })
+        )
+      ).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    };
+
+    it("should return zero active hour rows when all tasks are all-day tasks", () => {
+      const allDayTasks = [
+        { id: "1", title: "LinkedIn Post", startTime: null },
+        { id: "2", title: "Math Assignment", startTime: null },
+        { id: "3", title: "Video on X", startTime: null },
+      ];
+
+      const activeHours = extractActiveHours(allDayTasks);
+      expect(activeHours).toHaveLength(0);
+      expect(activeHours).toEqual([]);
+    });
+
+    it("should return ONLY hours that have scheduled tasks, completely omitting empty hours", () => {
+      const mixedTasks = [
+        { id: "1", title: "Morning Standup", startTime: "09:30" },
+        { id: "2", title: "Design Review", startTime: "14:00" },
+        { id: "3", title: "Quick Followup", startTime: "14:45" },
+        { id: "4", title: "All Day Prep", startTime: null },
+      ];
+
+      const activeHours = extractActiveHours(mixedTasks);
+      // Only 09:00 and 14:00 should be active hours
+      expect(activeHours).toEqual(["09:00", "14:00"]);
+      // Non-scheduled hours (07:00, 08:00, 10:00, 11:00, 12:00, 13:00, 15:00... 21:00) must NOT be present
+      expect(activeHours).not.toContain("07:00");
+      expect(activeHours).not.toContain("08:00");
+      expect(activeHours).not.toContain("10:00");
+      expect(activeHours).not.toContain("11:00");
+      expect(activeHours).not.toContain("12:00");
+      expect(activeHours).not.toContain("13:00");
+      expect(activeHours).not.toContain("15:00");
+      expect(activeHours).not.toContain("20:00");
+    });
+
+    it("should sort active hour rows chronologically", () => {
+      const scatteredTasks = [
+        { id: "1", title: "Late Task", startTime: "21:00" },
+        { id: "2", title: "Early Task", startTime: "07:15" },
+        { id: "3", title: "Noon Task", startTime: "12:30" },
+      ];
+
+      const activeHours = extractActiveHours(scatteredTasks);
+      expect(activeHours).toEqual(["07:00", "12:00", "21:00"]);
+    });
+  });
 });
