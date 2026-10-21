@@ -31,16 +31,24 @@ export function AgendaView({
     );
   });
 
-  // Group by date
+  // Group by date (strictly normalized to YYYY-MM-DD)
   const groupedTasks = filteredTasks.reduce<Record<string, any[]>>((acc, task) => {
-    const dStr = task.dateString || toDateString(task.date);
+    const rawDate = task.dateString || task.date;
+    const dStr = toDateString(rawDate);
     if (!acc[dStr]) acc[dStr] = [];
     acc[dStr].push(task);
     return acc;
   }, {});
 
   // Reverse chronological sorting: newest dates first, older dates at the bottom
-  const sortedDates = Object.keys(groupedTasks).sort((a, b) => b.localeCompare(a));
+  const sortedDates = Object.keys(groupedTasks).sort((a, b) => {
+    const timeA = new Date(a).getTime();
+    const timeB = new Date(b).getTime();
+    if (!isNaN(timeA) && !isNaN(timeB)) {
+      return timeB - timeA; // Descending: newest date at top
+    }
+    return b.localeCompare(a);
+  });
 
   const getPriorityStyle = (priority?: string) => {
     switch (priority) {
@@ -89,7 +97,14 @@ export function AgendaView({
         <div className="space-y-6">
           {sortedDates.map((dateStr) => {
             const dateObj = parseISO(dateStr);
-            const dateTasks = groupedTasks[dateStr];
+            const dateTasks = (groupedTasks[dateStr] || []).slice().sort((a, b) => {
+              if (!a.startTime && b.startTime) return -1;
+              if (a.startTime && !b.startTime) return 1;
+              if (a.startTime && b.startTime) {
+                return a.startTime.localeCompare(b.startTime);
+              }
+              return 0;
+            });
 
             return (
               <div
