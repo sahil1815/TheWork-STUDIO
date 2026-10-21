@@ -532,10 +532,10 @@ export function TaskModal({
                     onChange={(e) => setEditStatus(e.target.value as TaskStatus)}
                     className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value={TaskStatus.TODO}>To Do</option>
-                    <option value={TaskStatus.IN_PROGRESS}>In Progress</option>
-                    <option value={TaskStatus.DONE}>Done</option>
-                    <option value={TaskStatus.CANCELLED}>Cancelled</option>
+                    <option value={TaskStatus.TODO} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">To Do</option>
+                    <option value={TaskStatus.IN_PROGRESS} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">In Progress</option>
+                    <option value={TaskStatus.DONE} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">Done</option>
+                    <option value={TaskStatus.CANCELLED} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">Cancelled</option>
                   </select>
                 </div>
                 <div>
@@ -547,9 +547,9 @@ export function TaskModal({
                     onChange={(e) => setEditPriority(e.target.value as TaskPriority)}
                     className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value={TaskPriority.LOW}>Low</option>
-                    <option value={TaskPriority.MEDIUM}>Medium</option>
-                    <option value={TaskPriority.HIGH}>High</option>
+                    <option value={TaskPriority.LOW} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">Low</option>
+                    <option value={TaskPriority.MEDIUM} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">Medium</option>
+                    <option value={TaskPriority.HIGH} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">High</option>
                   </select>
                 </div>
               </div>
@@ -614,7 +614,7 @@ export function TaskModal({
                     {/* Member Attribution: Assigned To & Created By */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2.5 border-t border-purple-200/60 dark:border-purple-800/60">
                       {/* Assigned To */}
-                      <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/90 dark:bg-zinc-800/90 border border-purple-100 dark:border-purple-900/40 shadow-2xs">
+                      <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/90 dark:bg-zinc-900 border border-purple-100 dark:border-purple-900/60 shadow-2xs">
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/80 text-purple-700 dark:text-purple-300 mt-0.5">
                           <UserCheck className="h-3.5 w-3.5" />
                         </div>
@@ -626,10 +626,14 @@ export function TaskModal({
                             <select
                               value={editAssigneeId}
                               onChange={(e) => setEditAssigneeId(e.target.value)}
-                              className="w-full rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-850 px-2 py-1 text-xs font-semibold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                              className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer"
                             >
                               {teamMembers.map((m) => (
-                                <option key={m.id} value={m.id}>
+                                <option
+                                  key={m.id}
+                                  value={m.id}
+                                  className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+                                >
                                   {m.name || m.email} ({m.role.toLowerCase()})
                                 </option>
                               ))}
@@ -648,7 +652,7 @@ export function TaskModal({
                       </div>
 
                       {/* Created By */}
-                      <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/90 dark:bg-zinc-800/90 border border-purple-100 dark:border-purple-900/40 shadow-2xs">
+                      <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/90 dark:bg-zinc-900 border border-purple-100 dark:border-purple-900/60 shadow-2xs">
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 mt-0.5">
                           <User className="h-3.5 w-3.5" />
                         </div>
@@ -675,11 +679,17 @@ export function TaskModal({
                       onChange={(e) => setEditTeamId(e.target.value)}
                       className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
-                      <option value="">Personal Task (No Team)</option>
+                      <option value="" className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">
+                        Personal Task (No Team)
+                      </option>
                       {teams
                         .filter((t) => t.role !== "GUEST")
                         .map((t) => (
-                          <option key={t.id} value={t.id}>
+                          <option
+                            key={t.id}
+                            value={t.id}
+                            className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+                          >
                             Convert to Team: {t.name}
                           </option>
                         ))}
@@ -700,7 +710,11 @@ export function TaskModal({
                             className="w-full rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           >
                             {teamMembers.map((m) => (
-                              <option key={m.id} value={m.id}>
+                              <option
+                                key={m.id}
+                                value={m.id}
+                                className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+                              >
                                 {m.name || m.email} ({m.role.toLowerCase()})
                               </option>
                             ))}
@@ -937,10 +951,10 @@ export function TaskModal({
                                 }
                                 className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-1.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               >
-                                <option value={TaskStatus.TODO}>To Do</option>
-                                <option value={TaskStatus.IN_PROGRESS}>In Progress</option>
-                                <option value={TaskStatus.DONE}>Done</option>
-                                <option value={TaskStatus.CANCELLED}>Cancelled</option>
+                                <option value={TaskStatus.TODO} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">To Do</option>
+                                <option value={TaskStatus.IN_PROGRESS} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">In Progress</option>
+                                <option value={TaskStatus.DONE} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">Done</option>
+                                <option value={TaskStatus.CANCELLED} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">Cancelled</option>
                               </select>
                             </div>
                             <div>
@@ -958,9 +972,9 @@ export function TaskModal({
                                 }
                                 className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-1.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               >
-                                <option value={TaskPriority.LOW}>Low</option>
-                                <option value={TaskPriority.MEDIUM}>Medium</option>
-                                <option value={TaskPriority.HIGH}>High</option>
+                                <option value={TaskPriority.LOW} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">Low</option>
+                                <option value={TaskPriority.MEDIUM} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">Medium</option>
+                                <option value={TaskPriority.HIGH} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">High</option>
                               </select>
                             </div>
                           </div>
@@ -1016,9 +1030,15 @@ export function TaskModal({
                                   }
                                   className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-1.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 >
-                                  <option value="">Personal Task (No Team)</option>
+                                  <option value="" className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">
+                                    Personal Task (No Team)
+                                  </option>
                                   {teams.map((t) => (
-                                    <option key={t.id} value={t.id}>
+                                    <option
+                                      key={t.id}
+                                      value={t.id}
+                                      className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+                                    >
                                       {t.name}
                                     </option>
                                   ))}

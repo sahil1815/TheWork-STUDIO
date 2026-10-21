@@ -171,7 +171,7 @@ export function PenaltyDashboardWidget({
                 loadData(summary?.currentMonthYear);
                 setHistoryOpen(true);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-750 transition shadow-2xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition shadow-2xs"
             >
               <History className="h-3.5 w-3.5 text-zinc-500" />
               <span>View Penalty History</span>
@@ -186,7 +186,7 @@ export function PenaltyDashboardWidget({
             className={`p-3.5 rounded-lg border transition ${
               personalEnabled
                 ? "border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/20"
-                : "border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-850/20 opacity-75"
+                : "border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-800/40 opacity-75"
             }`}
           >
             <div className="flex items-center justify-between gap-2">
@@ -231,7 +231,7 @@ export function PenaltyDashboardWidget({
             className={`p-3.5 rounded-lg border transition ${
               teamEnabled
                 ? "border-purple-200 dark:border-purple-900/60 bg-purple-50/40 dark:bg-purple-950/20"
-                : "border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-850/20 opacity-75"
+                : "border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-800/40 opacity-75"
             }`}
           >
             <div className="flex items-center justify-between gap-2">
@@ -302,7 +302,7 @@ export function PenaltyDashboardWidget({
             </div>
 
             {/* Month Selector Bar & Scope Filter */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 bg-zinc-50 dark:bg-zinc-850/50 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
               {/* Month Selector */}
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-zinc-400" />
@@ -443,7 +443,7 @@ export function PenaltyDashboardWidget({
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-3 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-850/50 flex items-center justify-between text-[11px] text-zinc-500 shrink-0">
+            <div className="px-6 py-3 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/50 flex items-center justify-between text-[11px] text-zinc-500 shrink-0">
               <span className="flex items-center gap-1">
                 <Info className="h-3.5 w-3.5 text-zinc-400" />
                 <span>Counts reset to 0 on the 1st of each month without losing history.</span>

@@ -197,7 +197,11 @@ export function ConvertTaskModal({
                   required
                 >
                   {eligibleTeams.map((t) => (
-                    <option key={t.id} value={t.id}>
+                    <option
+                      key={t.id}
+                      value={t.id}
+                      className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+                    >
                       {t.name} ({t.role.toLowerCase()})
                     </option>
                   ))}
@@ -222,7 +226,11 @@ export function ConvertTaskModal({
                     required
                   >
                     {teamMembers.map((m) => (
-                      <option key={m.id} value={m.id}>
+                      <option
+                        key={m.id}
+                        value={m.id}
+                        className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+                      >
                         {m.name || m.email} ({m.role.toLowerCase()})
                         {m.id === currentUserId ? " — You" : ""}
                       </option>
