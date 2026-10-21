@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { taskSchema, rescheduleTaskSchema, batchTasksSchema } from "@/lib/validations/task";
+import { taskSchema, rescheduleTaskSchema, batchTasksSchema, calendarViewSchema, CalendarViewMode } from "@/lib/validations/task";
 import {
   formatTaskTiming,
   getMonthDays,
@@ -245,6 +245,67 @@ describe("Phase 1: Tasks and Calendar Tests (FR-03 to FR-09)", () => {
 
       expect(teamTasks.map((t) => t.id)).toEqual(["2", "3"]);
       expect(personalTasks.map((t) => t.id)).toEqual(["1", "4"]);
+    });
+  });
+
+  describe("Flexible Default Calendar View Filtering (Month, Week, Day, Agenda)", () => {
+    it("should validate all 4 allowed view filter modes", () => {
+      const allowedModes: CalendarViewMode[] = ["month", "week", "day", "agenda"];
+      for (const mode of allowedModes) {
+        const result = calendarViewSchema.safeParse(mode);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data).toBe(mode);
+        }
+      }
+    });
+
+    it("should reject invalid view filter modes", () => {
+      const invalidModes = ["year", "quarter", "workweek", "list", "", "random"];
+      for (const mode of invalidModes) {
+        const result = calendarViewSchema.safeParse(mode);
+        expect(result.success).toBe(false);
+      }
+    });
+
+    it("should correctly resolve initial calendar view based on user preference and fallback", () => {
+      const resolveView = (userPref?: string | null, queryParam?: string | null): CalendarViewMode => {
+        const validModes: CalendarViewMode[] = ["month", "week", "day", "agenda"];
+        if (queryParam && validModes.includes(queryParam as CalendarViewMode)) {
+          return queryParam as CalendarViewMode;
+        }
+        if (userPref && validModes.includes(userPref as CalendarViewMode)) {
+          return userPref as CalendarViewMode;
+        }
+        return "month";
+      };
+
+      // Default with no settings -> month
+      expect(resolveView(undefined, undefined)).toBe("month");
+      expect(resolveView(null, null)).toBe("month");
+      expect(resolveView("invalid", null)).toBe("month");
+
+      // User preference set to week
+      expect(resolveView("week", undefined)).toBe("week");
+
+      // User preference set to day
+      expect(resolveView("day", undefined)).toBe("day");
+
+      // User preference set to agenda
+      expect(resolveView("agenda", undefined)).toBe("agenda");
+
+      // User preference set to month
+      expect(resolveView("month", undefined)).toBe("month");
+
+      // URL query parameter takes priority for temporary navigation
+      expect(resolveView("week", "day")).toBe("day");
+      expect(resolveView("day", "agenda")).toBe("agenda");
+      expect(resolveView("agenda", "month")).toBe("month");
+      expect(resolveView("month", "week")).toBe("week");
+
+      // Invalid query parameter falls back to user preference
+      expect(resolveView("week", "invalid")).toBe("week");
+      expect(resolveView("day", "")).toBe("day");
     });
   });
 });

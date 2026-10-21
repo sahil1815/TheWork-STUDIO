@@ -8,6 +8,8 @@ import {
   batchTasksSchema,
   convertPersonalTaskSchema,
   penaltySettingSchema,
+  calendarViewSchema,
+  CalendarViewMode,
   TaskInput,
   BatchTasksInput,
   RescheduleTaskInput,
@@ -833,5 +835,48 @@ export async function waiveTeamTaskPenaltyAction(teamId: string, penaltyId: stri
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to waive penalty";
     return { success: false, error: message };
+  }
+}
+
+/**
+ * Update the user's default calendar view mode (month, week, day, agenda)
+ */
+export async function updateDefaultCalendarView(view: CalendarViewMode) {
+  try {
+    const userId = await getAuthUserId();
+    const validatedView = calendarViewSchema.parse(view);
+
+    const user = await db.user.update({
+      where: { id: userId },
+      data: { defaultCalendarView: validatedView },
+      select: { id: true, defaultCalendarView: true },
+    });
+
+    revalidatePath("/calendar");
+    revalidatePath("/settings/account");
+
+    return { success: true, defaultCalendarView: user.defaultCalendarView as CalendarViewMode };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update default calendar view";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Get the current user's default calendar view mode
+ */
+export async function getDefaultCalendarView(): Promise<CalendarViewMode> {
+  try {
+    const userId = await getAuthUserId();
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { defaultCalendarView: true },
+    });
+    if (user?.defaultCalendarView && ["month", "week", "day", "agenda"].includes(user.defaultCalendarView)) {
+      return user.defaultCalendarView as CalendarViewMode;
+    }
+    return "month";
+  } catch {
+    return "month";
   }
 }

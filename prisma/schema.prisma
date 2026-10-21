@@ -79,9 +79,10 @@ model User {
   email         String    @unique
   emailVerified DateTime? @map("email_verified")
   image         String?
-  passwordHash  String?   @map("password_hash")
-  timeZone      String    @default("UTC") @map("time_zone")
-  createdAt     DateTime  @default(now()) @map("created_at")
+  passwordHash        String?   @map("password_hash")
+  timeZone            String    @default("UTC") @map("time_zone")
+  defaultCalendarView String    @default("month") @map("default_calendar_view")
+  createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
   accounts               Account[]

@@ -104,3 +104,7 @@ export const penaltySettingSchema = z.object({
 });
 
 export type PenaltySettingInput = z.infer<typeof penaltySettingSchema>;
+
+export const calendarViewSchema = z.enum(["month", "week", "day", "agenda"]);
+export type CalendarViewMode = z.infer<typeof calendarViewSchema>;
+

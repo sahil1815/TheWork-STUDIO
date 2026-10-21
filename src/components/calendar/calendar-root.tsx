@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CalendarHeader } from "./calendar-header";
 import { MonthView } from "./month-view";
 import { WeekView } from "./week-view";
@@ -12,6 +12,7 @@ import {
   toggleTaskComplete,
   rescheduleTask,
   getCalendarTasks,
+  updateDefaultCalendarView,
 } from "@/actions/task-actions";
 import {
   addMonths,
@@ -35,13 +36,49 @@ interface CalendarRootProps {
   initialTasks: any[];
   teams: TeamOption[];
   currentUserId?: string;
+  defaultView?: CalendarViewMode;
+  initialViewMode?: CalendarViewMode;
 }
 
-export function CalendarRoot({ initialTasks, teams, currentUserId }: CalendarRootProps) {
+export function CalendarRoot({
+  initialTasks,
+  teams,
+  currentUserId,
+  defaultView = "month",
+  initialViewMode,
+}: CalendarRootProps) {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
-  const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
+  const [activeDefaultView, setActiveDefaultView] = useState<CalendarViewMode>(defaultView);
+  const [viewMode, setViewMode] = useState<CalendarViewMode>(initialViewMode || defaultView);
   const [filter, setFilter] = useState<string>("all");
   const [tasks, setTasks] = useState<any[]>(initialTasks);
+
+  // Sync client storage and default view
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("tw-default-calendar-view") as CalendarViewMode | null;
+      if (stored && ["month", "week", "day", "agenda"].includes(stored)) {
+        if (!initialViewMode && defaultView === "month" && stored !== "month") {
+          setViewMode(stored);
+          setActiveDefaultView(stored);
+        }
+      } else if (defaultView) {
+        localStorage.setItem("tw-default-calendar-view", defaultView);
+      }
+    } catch {
+      // ignore
+    }
+  }, [defaultView, initialViewMode]);
+
+  const handleSetDefaultView = async (newDefault: CalendarViewMode) => {
+    setActiveDefaultView(newDefault);
+    try {
+      localStorage.setItem("tw-default-calendar-view", newDefault);
+    } catch {
+      // ignore
+    }
+    await updateDefaultCalendarView(newDefault);
+  };
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -185,6 +222,8 @@ export function CalendarRoot({ initialTasks, teams, currentUserId }: CalendarRoo
         currentDate={currentDate}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        defaultView={activeDefaultView}
+        onSetDefaultView={handleSetDefaultView}
         onPrev={handlePrev}
         onNext={handleNext}
         onToday={handleToday}

@@ -11,6 +11,7 @@ import {
   Calendar as CalendarIcon,
   Send,
   Inbox,
+  Star,
 } from "lucide-react";
 
 interface TeamOption {
@@ -23,6 +24,8 @@ interface CalendarHeaderProps {
   currentDate: Date;
   viewMode: CalendarViewMode;
   onViewModeChange: (mode: CalendarViewMode) => void;
+  defaultView?: CalendarViewMode;
+  onSetDefaultView?: (mode: CalendarViewMode) => void;
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
@@ -37,6 +40,8 @@ export function CalendarHeader({
   currentDate,
   viewMode,
   onViewModeChange,
+  defaultView,
+  onSetDefaultView,
   onPrev,
   onNext,
   onToday,
@@ -118,20 +123,46 @@ export function CalendarHeader({
         </div>
 
         {/* View Mode buttons (FR-07: Month, Week, Day, Agenda) */}
-        <div className="flex items-center rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800 p-0.5 text-xs font-medium">
-          {(["month", "week", "day", "agenda"] as CalendarViewMode[]).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => onViewModeChange(mode)}
-              className={`rounded-md px-2.5 py-1 capitalize transition ${
-                viewMode === mode
-                  ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
-                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-              }`}
-            >
-              {mode}
-            </button>
-          ))}
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800 p-0.5 text-xs font-medium">
+            {(["month", "week", "day", "agenda"] as CalendarViewMode[]).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => onViewModeChange(mode)}
+                className={`rounded-md px-2.5 py-1 capitalize transition ${
+                  viewMode === mode
+                    ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs font-semibold"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+
+          {/* Default view indicator / set default button */}
+          {onSetDefaultView && (
+            viewMode === defaultView ? (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/80 shadow-xs"
+                title={`"${viewMode}" is currently your default calendar view`}
+              >
+                <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+                <span className="hidden sm:inline">Default</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onSetDefaultView(viewMode)}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-zinc-600 dark:text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 border border-zinc-200 dark:border-zinc-800 hover:border-amber-300 dark:hover:border-amber-800 transition shadow-xs"
+                title={`Set "${viewMode}" as your default view whenever you open the calendar`}
+              >
+                <Star className="h-3 w-3 text-zinc-400 group-hover:text-amber-500" />
+                <span className="hidden sm:inline">Set default</span>
+                <span className="sm:hidden">Default</span>
+              </button>
+            )
+          )}
         </div>
 
         {/* Propose Task button */}

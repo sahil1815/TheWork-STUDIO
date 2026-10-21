@@ -11,11 +11,13 @@ declare module "next-auth" {
     user: {
       id: string;
       timeZone: string;
+      defaultCalendarView: string;
     } & DefaultSession["user"];
   }
 
   interface User {
     timeZone?: string;
+    defaultCalendarView?: string;
   }
 }
 
@@ -66,6 +68,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           image: user.image,
           timeZone: user.timeZone,
+          defaultCalendarView: user.defaultCalendarView || "month",
         };
       },
     }),
@@ -75,9 +78,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id;
         token.timeZone = user.timeZone || "UTC";
+        token.defaultCalendarView = user.defaultCalendarView || "month";
       }
       if (trigger === "update" && session?.timeZone) {
         token.timeZone = session.timeZone;
+      }
+      if (trigger === "update" && session?.defaultCalendarView) {
+        token.defaultCalendarView = session.defaultCalendarView;
       }
       return token;
     },
@@ -85,6 +92,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (token && session.user) {
         session.user.id = token.id as string;
         session.user.timeZone = (token.timeZone as string) || "UTC";
+        session.user.defaultCalendarView = (token.defaultCalendarView as string) || "month";
       }
       return session;
     },

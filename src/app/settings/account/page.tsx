@@ -2,9 +2,27 @@
 
 import { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
-import { User, Mail, Globe, Trash2, AlertTriangle, CheckCircle, Sun, Moon, Laptop, Palette, X } from "lucide-react";
+import {
+  User,
+  Mail,
+  Globe,
+  Trash2,
+  AlertTriangle,
+  CheckCircle,
+  Sun,
+  Moon,
+  Laptop,
+  Palette,
+  X,
+  Calendar,
+  Columns3,
+  Clock,
+  ListFilter,
+} from "lucide-react";
 import { ReminderSettingsForm } from "@/components/settings/reminder-settings-form";
 import { getReminderPreferences } from "@/actions/reminder-actions";
+import { getDefaultCalendarView, updateDefaultCalendarView } from "@/actions/task-actions";
+import { CalendarViewMode } from "@/lib/validations/task";
 import { useTheme } from "@/components/providers/theme-provider";
 
 function AppearanceSettingsCard() {
@@ -61,6 +79,172 @@ function AppearanceSettingsCard() {
           <Laptop className="h-5 w-5 mb-1.5 text-slate-500" />
           <span className="text-xs">System</span>
         </button>
+      </div>
+    </div>
+  );
+}
+
+function CalendarPreferencesCard({
+  initialDefaultView = "month",
+}: {
+  initialDefaultView?: CalendarViewMode;
+}) {
+  const { data: session, update } = useSession();
+  const [selectedView, setSelectedView] = useState<CalendarViewMode>(initialDefaultView);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    async function loadPref() {
+      if (session?.user?.defaultCalendarView) {
+        setSelectedView(session.user.defaultCalendarView as CalendarViewMode);
+      } else {
+        try {
+          const stored = localStorage.getItem("tw-default-calendar-view") as CalendarViewMode | null;
+          if (stored && ["month", "week", "day", "agenda"].includes(stored)) {
+            setSelectedView(stored);
+          } else {
+            const fetched = await getDefaultCalendarView();
+            setSelectedView(fetched);
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+    loadPref();
+  }, [session?.user?.defaultCalendarView]);
+
+  const handleSelect = async (view: CalendarViewMode) => {
+    setSelectedView(view);
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const res = await updateDefaultCalendarView(view);
+      if (res.success) {
+        try {
+          localStorage.setItem("tw-default-calendar-view", view);
+        } catch {
+          // ignore
+        }
+        await update({ defaultCalendarView: view });
+        setMessage({
+          type: "success",
+          text: `Default calendar view saved to "${view.charAt(0).toUpperCase() + view.slice(1)}". When you visit the website, the calendar will automatically open in this view.`,
+        });
+      } else {
+        setMessage({ type: "error", text: res.error || "Failed to update default calendar view" });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Network error updating calendar preference" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const views: {
+    id: CalendarViewMode;
+    label: string;
+    description: string;
+    icon: typeof Calendar;
+  }[] = [
+    {
+      id: "month",
+      label: "Month",
+      description: "Full monthly grid showing all scheduled tasks and days.",
+      icon: Calendar,
+    },
+    {
+      id: "week",
+      label: "Week",
+      description: "7-day view with hourly columns for detailed weekly scheduling.",
+      icon: Columns3,
+    },
+    {
+      id: "day",
+      label: "Day",
+      description: "Single-day focus with granular hourly timeline.",
+      icon: Clock,
+    },
+    {
+      id: "agenda",
+      label: "Agenda",
+      description: "Chronological agenda list of upcoming tasks and deadlines.",
+      icon: ListFilter,
+    },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4 shadow-xs">
+      <div className="flex items-center gap-2">
+        <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+          Default Calendar View
+        </h2>
+      </div>
+      <p className="text-sm text-slate-600 dark:text-slate-400">
+        Choose which view the calendar defaults to whenever you visit the website (Month, Week, Day, or Agenda).
+      </p>
+
+      {message && (
+        <div
+          className={`flex items-center gap-2 rounded-lg p-3 text-sm ${
+            message.type === "success"
+              ? "bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-900"
+              : "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900"
+          }`}
+        >
+          {message.type === "success" ? (
+            <CheckCircle className="h-4 w-4 shrink-0" />
+          ) : (
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+          )}
+          <span>{message.text}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
+        {views.map((v) => {
+          const Icon = v.icon;
+          const isSelected = selectedView === v.id;
+          return (
+            <button
+              key={v.id}
+              type="button"
+              disabled={saving}
+              onClick={() => handleSelect(v.id)}
+              className={`flex flex-col text-left p-4 rounded-xl border transition ${
+                isSelected
+                  ? "border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 shadow-xs ring-1 ring-blue-600 dark:ring-blue-500"
+                  : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700"
+              } disabled:opacity-50`}
+            >
+              <div className="flex items-center justify-between w-full mb-2">
+                <div
+                  className={`p-2 rounded-lg ${
+                    isSelected
+                      ? "bg-blue-600 text-white"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                </div>
+                {isSelected && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+                    Default
+                  </span>
+                )}
+              </div>
+              <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                {v.label}
+              </span>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                {v.description}
+              </p>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -207,6 +391,11 @@ export default function AccountSettingsPage() {
 
       {/* Theme / Appearance Settings */}
       <AppearanceSettingsCard />
+
+      {/* Calendar Default View Preferences */}
+      <CalendarPreferencesCard
+        initialDefaultView={(session.user.defaultCalendarView as CalendarViewMode) || "month"}
+      />
 
       {/* Time Zone Settings (FR-02) */}
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 space-y-4">
