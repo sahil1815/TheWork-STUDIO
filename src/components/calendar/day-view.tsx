@@ -64,11 +64,11 @@ export function DayView({
   const getPriorityStyle = (priority?: string) => {
     switch (priority) {
       case "HIGH":
-        return "text-rose-600 dark:text-rose-400 bg-rose-500/10 border-rose-500/20";
+        return "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800/60";
       case "LOW":
-        return "text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20";
+        return "text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-800/60";
       default:
-        return "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20";
+        return "text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800/60";
     }
   };
 
@@ -85,7 +85,7 @@ export function DayView({
           onSelectTask(task);
         }}
         style={{ borderLeftColor: task.color || "#3b82f6" }}
-        className={`group relative flex flex-col justify-between p-4 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/80 dark:bg-zinc-850/70 hover:bg-zinc-100/90 dark:hover:bg-zinc-800/90 border-l-4 transition shadow-xs hover:shadow-sm cursor-grab active:cursor-grabbing ${
+        className={`group relative flex flex-col justify-between p-4 rounded-xl border border-zinc-200/90 dark:border-zinc-700/80 bg-white dark:bg-zinc-800/90 hover:bg-zinc-50 dark:hover:bg-zinc-700/60 hover:border-zinc-300 dark:hover:border-zinc-600 border-l-4 transition shadow-xs hover:shadow-md cursor-grab active:cursor-grabbing ${
           isDone ? "opacity-60" : ""
         }`}
       >
@@ -99,7 +99,7 @@ export function DayView({
             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border mt-0.5 transition-all ${
               isDone
                 ? "bg-emerald-600 border-emerald-600 text-white shadow-xs"
-                : "border-zinc-400 dark:border-zinc-600 hover:border-zinc-600 dark:hover:border-zinc-400 bg-white dark:bg-zinc-900"
+                : "border-zinc-300 dark:border-zinc-600 hover:border-zinc-500 dark:hover:border-zinc-400 bg-white dark:bg-zinc-900"
             }`}
             title={isDone ? "Mark as incomplete" : "Mark as complete"}
           >
@@ -110,31 +110,31 @@ export function DayView({
             <div className="flex items-center justify-between gap-2">
               <span
                 className={`text-sm sm:text-base font-semibold text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors leading-snug break-words ${
-                  isDone ? "line-through text-zinc-500 dark:text-zinc-400" : ""
+                  isDone ? "line-through text-zinc-400 dark:text-zinc-500" : ""
                 }`}
               >
                 {task.title}
               </span>
 
               {isHourly && task.startTime && (
-                <span className="shrink-0 flex items-center gap-1 font-mono text-xs font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-200/60 dark:bg-zinc-800 px-2 py-0.5 rounded-md">
-                  <Clock className="h-3 w-3" />
+                <span className="shrink-0 flex items-center gap-1 font-mono text-xs font-medium text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-700/70 border border-zinc-200 dark:border-zinc-600/60 px-2 py-0.5 rounded-md">
+                  <Clock className="h-3 w-3 text-zinc-500 dark:text-zinc-400" />
                   <span>{formatTaskTiming(task.startTime, task.endTime)}</span>
                 </span>
               )}
             </div>
 
             {task.description && (
-              <p className="mt-1.5 text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
+              <p className="mt-1.5 text-xs text-zinc-600 dark:text-zinc-300 line-clamp-2 leading-relaxed">
                 {task.description}
               </p>
             )}
 
             {/* Badges / Metadata Row */}
-            <div className="flex flex-wrap items-center gap-2 mt-3 pt-2 border-t border-zinc-200/50 dark:border-zinc-800/50 text-xs">
+            <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-700/60 text-xs">
               {!isHourly && task.startTime && (
-                <span className="flex items-center gap-1 font-mono font-medium text-zinc-600 dark:text-zinc-300 bg-zinc-200/60 dark:bg-zinc-800 px-2 py-0.5 rounded-md">
-                  <Clock className="h-3 w-3 text-zinc-500" />
+                <span className="flex items-center gap-1 font-mono font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-700/70 border border-zinc-200 dark:border-zinc-600/60 px-2 py-0.5 rounded-md">
+                  <Clock className="h-3 w-3 text-zinc-500 dark:text-zinc-400" />
                   <span>{formatTaskTiming(task.startTime, task.endTime)}</span>
                 </span>
               )}
@@ -151,7 +151,7 @@ export function DayView({
               )}
 
               {(task.team || task.teamId) && (
-                <span className="flex items-center gap-1 font-medium text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-md">
+                <span className="flex items-center gap-1 font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800/60 px-2 py-0.5 rounded-md">
                   <Users className="h-3 w-3" />
                   <span>{task.team?.name || "Team Task"}</span>
                 </span>
@@ -159,7 +159,7 @@ export function DayView({
 
               {task.location && (
                 <span className="flex items-center gap-1 text-zinc-500 dark:text-zinc-400 px-1 py-0.5">
-                  <MapPin className="h-3 w-3 text-zinc-400" />
+                  <MapPin className="h-3 w-3 text-zinc-400 dark:text-zinc-500" />
                   <span className="truncate max-w-[140px]">{task.location}</span>
                 </span>
               )}

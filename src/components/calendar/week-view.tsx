@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { getWeekDays, toDateString, isSameDay, formatTaskTiming } from "@/lib/date-utils";
 import { format } from "date-fns";
-import { Check, Users, MapPin, Flag, Plus, Clock, Calendar as CalendarIcon } from "lucide-react";
+import { Check, Users, MapPin, Flag, Plus, Clock, ArrowRightLeft } from "lucide-react";
 
 interface WeekViewProps {
   currentDate: Date;
@@ -26,6 +26,7 @@ export function WeekView({
   const today = new Date();
 
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Group tasks by date string
   const tasksByDate = tasks.reduce<Record<string, any[]>>((acc, task) => {
@@ -54,6 +55,29 @@ export function WeekView({
       })
     )
   ).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+  // Auto-scroll to Today or the selected day on mobile devices
+  useEffect(() => {
+    if (!scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+
+    // Center today if in view, otherwise center currentDate
+    const todayIdx = weekDays.findIndex((day) => isSameDay(day, today));
+    const activeIdx = todayIdx !== -1 ? todayIdx : weekDays.findIndex((day) => isSameDay(day, currentDate));
+
+    if (activeIdx >= 0 && container.scrollWidth > container.clientWidth) {
+      const hasGutter = activeHours.length > 0;
+      const gutterWidth = hasGutter ? 64 : 0;
+      const colWidth = (container.scrollWidth - gutterWidth) / 7;
+      const targetLeft = gutterWidth + activeIdx * colWidth;
+      const centerOffset = targetLeft - container.clientWidth / 2 + colWidth / 2;
+
+      container.scrollTo({
+        left: Math.max(0, centerOffset),
+        behavior: "smooth",
+      });
+    }
+  }, [currentDate, activeHours.length]);
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     e.dataTransfer.setData("taskId", taskId);
@@ -101,11 +125,11 @@ export function WeekView({
           onSelectTask(task);
         }}
         style={{ borderLeftColor: task.color || "#3b82f6" }}
-        className={`group relative flex flex-col gap-1.5 p-2.5 rounded-lg border border-zinc-200/80 dark:border-zinc-750 bg-white dark:bg-zinc-800/90 hover:bg-zinc-50 dark:hover:bg-zinc-750 border-l-4 transition-all shadow-xs hover:shadow-sm cursor-grab active:cursor-grabbing ${
+        className={`group relative flex flex-col gap-1.5 p-3 rounded-lg border border-zinc-200/80 dark:border-zinc-750 bg-white dark:bg-zinc-800/90 hover:bg-zinc-50 dark:hover:bg-zinc-750 border-l-4 transition-all shadow-xs hover:shadow-sm cursor-grab active:cursor-grabbing ${
           isDone ? "opacity-60" : ""
         }`}
       >
-        <div className="flex items-start gap-2">
+        <div className="flex items-start gap-2.5">
           <button
             type="button"
             onClick={(e) => {
@@ -132,7 +156,7 @@ export function WeekView({
         </div>
 
         {/* Task Metadata Row */}
-        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400 pl-6">
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400 pl-6.5">
           {task.startTime && (
             <span className="flex items-center gap-1 font-mono font-medium text-[10px] text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-700/80 px-1.5 py-0.5 rounded">
               <Clock className="h-2.5 w-2.5" />
@@ -174,90 +198,108 @@ export function WeekView({
 
   // -------------------------------------------------------------
   // VIEW MODE A: No Timed Tasks Across the Entire Week (e.g. All-Day or Empty)
-  // Clean 7-column layout that spans full width without empty hourly rows
+  // Clean 7-column layout with min 190px per column so mobile scrolls smoothly
   // -------------------------------------------------------------
   if (activeHours.length === 0) {
     return (
       <div className="flex flex-col rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-sm">
-        {/* Weekday Column Headers */}
-        <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-center py-3 divide-x divide-zinc-200 dark:border-zinc-800">
-          {weekDays.map((day) => {
-            const isToday = isSameDay(day, today);
-            const dateStr = toDateString(day);
-            const count = (tasksByDate[dateStr] || []).length;
-
-            return (
-              <div key={day.toISOString()} className="flex flex-col items-center px-1">
-                <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                  {format(day, "EEE")}
-                </span>
-                <span
-                  className={`mt-1 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition ${
-                    isToday
-                      ? "bg-blue-600 text-white shadow-xs"
-                      : "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800"
-                  }`}
-                >
-                  {format(day, "d")}
-                </span>
-                {count > 0 && (
-                  <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 mt-0.5">
-                    {count} {count === 1 ? "task" : "tasks"}
-                  </span>
-                )}
-              </div>
-            );
-          })}
+        {/* Mobile Horizontal Scroll Helper Banner */}
+        <div className="sm:hidden flex items-center justify-between px-3 py-1.5 bg-zinc-50/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 text-[11px] text-zinc-500">
+          <span>Swipe horizontally to view full week</span>
+          <span className="font-mono text-[10px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1">
+            <ArrowRightLeft className="h-3 w-3" />
+            Swipe
+          </span>
         </div>
 
-        {/* 7-Day Columns Body (Spacious, fills view, no empty hourly rows) */}
-        <div className="grid grid-cols-7 divide-x divide-zinc-200 dark:divide-zinc-800 min-h-[540px]">
-          {weekDays.map((day) => {
-            const dateStr = toDateString(day);
-            const dayTasks = tasksByDate[dateStr] || [];
-            const dropKey = `${dateStr}-col`;
-            const isDragTarget = dragOverKey === dropKey;
+        {/* Scrollable Container */}
+        <div
+          ref={scrollContainerRef}
+          className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          <div className="w-full">
+            {/* Weekday Column Headers (Each column has min 190px width) */}
+            <div className="grid grid-cols-[repeat(7,minmax(190px,1fr))] border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-center py-3 divide-x divide-zinc-200 dark:divide-zinc-800">
+              {weekDays.map((day) => {
+                const isToday = isSameDay(day, today);
+                const dateStr = toDateString(day);
+                const count = (tasksByDate[dateStr] || []).length;
 
-            return (
-              <div
-                key={dateStr}
-                onClick={() => onDateClick(dateStr)}
-                onDragOver={(e) => handleDragOver(e, dropKey)}
-                onDragLeave={() => setDragOverKey(null)}
-                onDrop={(e) => handleDrop(e, dateStr)}
-                className={`p-2.5 space-y-2 flex flex-col justify-between transition group/col cursor-pointer ${
-                  isDragTarget
-                    ? "bg-blue-50/70 dark:bg-blue-950/40 ring-2 ring-inset ring-blue-500"
-                    : "hover:bg-zinc-50/40 dark:hover:bg-zinc-800/10"
-                }`}
-              >
-                {/* Task Stack */}
-                <div className="space-y-2">
-                  {dayTasks.map((task) => renderTaskCard(task, false))}
+                return (
+                  <div key={day.toISOString()} className="flex flex-col items-center px-2">
+                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                      {format(day, "EEE")}
+                    </span>
+                    <span
+                      className={`mt-1 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition ${
+                        isToday
+                          ? "bg-blue-600 text-white shadow-xs"
+                          : "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      {format(day, "d")}
+                    </span>
+                    {count > 0 && (
+                      <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 mt-0.5">
+                        {count} {count === 1 ? "task" : "tasks"}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
 
-                  {dayTasks.length === 0 && (
-                    <div className="py-12 flex flex-col items-center justify-center text-center opacity-0 group-hover/col:opacity-100 transition-opacity">
-                      <Plus className="h-5 w-5 text-zinc-400/70" />
-                      <span className="text-xs text-zinc-400 mt-1">Click to add</span>
+            {/* 7-Day Columns Body (Spacious, min 190px per column, no empty hourly rows) */}
+            <div className="grid grid-cols-[repeat(7,minmax(190px,1fr))] divide-x divide-zinc-200 dark:divide-zinc-800 min-h-[540px]">
+              {weekDays.map((day) => {
+                const dateStr = toDateString(day);
+                const dayTasks = tasksByDate[dateStr] || [];
+                const dropKey = `${dateStr}-col`;
+                const isDragTarget = dragOverKey === dropKey;
+
+                return (
+                  <div
+                    key={dateStr}
+                    onClick={() => onDateClick(dateStr)}
+                    onDragOver={(e) => handleDragOver(e, dropKey)}
+                    onDragLeave={() => setDragOverKey(null)}
+                    onDrop={(e) => handleDrop(e, dateStr)}
+                    className={`p-2.5 space-y-2 flex flex-col justify-between transition group/col cursor-pointer ${
+                      isDragTarget
+                        ? "bg-blue-50/70 dark:bg-blue-950/40 ring-2 ring-inset ring-blue-500"
+                        : "hover:bg-zinc-50/40 dark:hover:bg-zinc-800/10"
+                    }`}
+                  >
+                    {/* Task Stack */}
+                    <div className="space-y-2">
+                      {dayTasks.map((task) => renderTaskCard(task, false))}
+
+                      {dayTasks.length === 0 && (
+                        <div className="py-12 flex flex-col items-center justify-center text-center opacity-0 group-hover/col:opacity-100 transition-opacity">
+                          <Plus className="h-5 w-5 text-zinc-400/70" />
+                          <span className="text-xs text-zinc-400 mt-1">Click to add</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                {/* Add Task Button at bottom of column */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDateClick(dateStr);
-                  }}
-                  className="w-full py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-dashed border-zinc-200 dark:border-zinc-800 opacity-0 group-hover/col:opacity-100 transition flex items-center justify-center gap-1 mt-auto"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>Add task</span>
-                </button>
-              </div>
-            );
-          })}
+                    {/* Add Task Button at bottom of column */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDateClick(dateStr);
+                      }}
+                      className="w-full py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-dashed border-zinc-200 dark:border-zinc-800 opacity-0 group-hover/col:opacity-100 transition flex items-center justify-center gap-1 mt-auto"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>Add task</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -266,117 +308,134 @@ export function WeekView({
   // -------------------------------------------------------------
   // VIEW MODE B: Active Timed Tasks Exist
   // Render ONLY rows for the specific timestamps that contain tasks!
-  // Zero empty timestamp rows are displayed.
+  // Horizontal scroll ensures columns are never compressed below 190px.
   // -------------------------------------------------------------
   return (
     <div className="flex flex-col rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-sm">
-      {/* Header Row: Days of Week */}
-      <div className="grid grid-cols-[64px_repeat(7,1fr)] divide-x divide-zinc-200 dark:divide-zinc-800 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-center py-2.5">
-        <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center justify-center">
-          GMT
-        </div>
-        {weekDays.map((day) => {
-          const isToday = isSameDay(day, today);
-          const dateStr = toDateString(day);
-          const count = (tasksByDate[dateStr] || []).length;
-
-          return (
-            <div key={day.toISOString()} className="flex flex-col items-center px-1">
-              <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                {format(day, "EEE")}
-              </span>
-              <span
-                className={`mt-1 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
-                  isToday
-                    ? "bg-blue-600 text-white shadow-xs"
-                    : "text-zinc-800 dark:text-zinc-200"
-                }`}
-              >
-                {format(day, "d")}
-              </span>
-              {count > 0 && (
-                <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 mt-0.5">
-                  {count} {count === 1 ? "task" : "tasks"}
-                </span>
-              )}
-            </div>
-          );
-        })}
+      {/* Mobile Horizontal Scroll Helper Banner */}
+      <div className="sm:hidden flex items-center justify-between px-3 py-1.5 bg-zinc-50/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 text-[11px] text-zinc-500">
+        <span>Swipe horizontally to view full week</span>
+        <span className="font-mono text-[10px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1">
+          <ArrowRightLeft className="h-3 w-3" />
+          Swipe
+        </span>
       </div>
 
-      {/* All-Day Tasks Row (Only rendered if all-day tasks exist) */}
-      {allDayTasksInWeek.length > 0 && (
-        <div className="grid grid-cols-[64px_repeat(7,1fr)] divide-x divide-zinc-200 dark:divide-zinc-800 border-b border-zinc-200 dark:border-zinc-800 min-h-[56px] bg-zinc-50/20 dark:bg-zinc-900/20">
-          <div className="p-2 text-[11px] uppercase font-bold text-zinc-400 flex items-center justify-center select-none text-center leading-tight">
-            All-day
+      <div
+        ref={scrollContainerRef}
+        className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700"
+        style={{ WebkitOverflowScrolling: "touch" }}
+      >
+        <div className="w-full">
+          {/* Header Row: Days of Week */}
+          <div className="grid grid-cols-[64px_repeat(7,minmax(190px,1fr))] divide-x divide-zinc-200 dark:divide-zinc-800 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-center py-2.5">
+            <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center justify-center">
+              GMT
+            </div>
+            {weekDays.map((day) => {
+              const isToday = isSameDay(day, today);
+              const dateStr = toDateString(day);
+              const count = (tasksByDate[dateStr] || []).length;
+
+              return (
+                <div key={day.toISOString()} className="flex flex-col items-center px-2">
+                  <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                    {format(day, "EEE")}
+                  </span>
+                  <span
+                    className={`mt-1 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                      isToday
+                        ? "bg-blue-600 text-white shadow-xs"
+                        : "text-zinc-800 dark:text-zinc-200"
+                    }`}
+                  >
+                    {format(day, "d")}
+                  </span>
+                  {count > 0 && (
+                    <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 mt-0.5">
+                      {count} {count === 1 ? "task" : "tasks"}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          {weekDays.map((day) => {
-            const dateStr = toDateString(day);
-            const allDayTasks = (tasksByDate[dateStr] || []).filter((t) => !t.startTime);
-            const dropKey = `${dateStr}-allday`;
-            const isDragTarget = dragOverKey === dropKey;
 
-            return (
-              <div
-                key={dropKey}
-                onClick={() => onDateClick(dateStr)}
-                onDragOver={(e) => handleDragOver(e, dropKey)}
-                onDragLeave={() => setDragOverKey(null)}
-                onDrop={(e) => handleDrop(e, dateStr)}
-                className={`p-2 space-y-1.5 transition cursor-pointer ${
-                  isDragTarget ? "bg-blue-50 dark:bg-blue-950/40 ring-2 ring-inset ring-blue-500" : "hover:bg-zinc-50/40 dark:hover:bg-zinc-800/10"
-                }`}
-              >
-                {allDayTasks.map((task) => renderTaskCard(task, false))}
+          {/* All-Day Tasks Row (Only rendered if all-day tasks exist) */}
+          {allDayTasksInWeek.length > 0 && (
+            <div className="grid grid-cols-[64px_repeat(7,minmax(190px,1fr))] divide-x divide-zinc-200 dark:divide-zinc-800 border-b border-zinc-200 dark:border-zinc-800 min-h-[56px] bg-zinc-50/20 dark:bg-zinc-900/20">
+              <div className="p-2 text-[11px] uppercase font-bold text-zinc-400 flex items-center justify-center select-none text-center leading-tight">
+                All-day
               </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Scheduled Timed Rows (ONLY rendered for activeHours that have tasks!) */}
-      <div className="divide-y divide-zinc-200 dark:divide-zinc-800 min-h-[400px]">
-        {activeHours.map((hour) => {
-          const hourNum = parseInt(hour.split(":")[0], 10);
-
-          return (
-            <div
-              key={hour}
-              className="grid grid-cols-[64px_repeat(7,1fr)] min-h-[72px] divide-x divide-zinc-200 dark:divide-zinc-800"
-            >
-              <div className="p-2 text-xs font-mono font-bold text-zinc-400 flex items-center justify-center select-none bg-zinc-50/30 dark:bg-zinc-900/40">
-                {hour}
-              </div>
-
               {weekDays.map((day) => {
                 const dateStr = toDateString(day);
-                const timedTasks = (tasksByDate[dateStr] || []).filter((t) => {
-                  if (!t.startTime) return false;
-                  const tHour = parseInt(t.startTime.split(":")[0], 10);
-                  return tHour === hourNum;
-                });
-
-                const slotKey = `${dateStr}-${hour}`;
-                const isDragTarget = dragOverKey === slotKey;
+                const allDayTasks = (tasksByDate[dateStr] || []).filter((t) => !t.startTime);
+                const dropKey = `${dateStr}-allday`;
+                const isDragTarget = dragOverKey === dropKey;
 
                 return (
                   <div
-                    key={slotKey}
-                    onClick={() => onDateClick(dateStr, hour)}
-                    onDragOver={(e) => handleDragOver(e, slotKey)}
+                    key={dropKey}
+                    onClick={() => onDateClick(dateStr)}
+                    onDragOver={(e) => handleDragOver(e, dropKey)}
                     onDragLeave={() => setDragOverKey(null)}
-                    onDrop={(e) => handleDrop(e, dateStr, hour)}
-                    className={`relative p-2 space-y-1.5 transition hover:bg-zinc-50/60 dark:hover:bg-zinc-800/40 cursor-pointer ${
-                      isDragTarget ? "bg-blue-50 dark:bg-blue-950/40 ring-2 ring-inset ring-blue-500" : ""
+                    onDrop={(e) => handleDrop(e, dateStr)}
+                    className={`p-2 space-y-1.5 transition cursor-pointer ${
+                      isDragTarget ? "bg-blue-50 dark:bg-blue-950/40 ring-2 ring-inset ring-blue-500" : "hover:bg-zinc-50/40 dark:hover:bg-zinc-800/10"
                     }`}
                   >
-                    {timedTasks.map((task) => renderTaskCard(task, true))}
+                    {allDayTasks.map((task) => renderTaskCard(task, false))}
                   </div>
                 );
               })}
             </div>
-          );
-        })}
+          )}
+
+          {/* Scheduled Timed Rows (ONLY rendered for activeHours that have tasks!) */}
+          <div className="divide-y divide-zinc-200 dark:divide-zinc-800 min-h-[400px]">
+            {activeHours.map((hour) => {
+              const hourNum = parseInt(hour.split(":")[0], 10);
+
+              return (
+                <div
+                  key={hour}
+                  className="grid grid-cols-[64px_repeat(7,minmax(190px,1fr))] min-h-[72px] divide-x divide-zinc-200 dark:divide-zinc-800"
+                >
+                  <div className="p-2 text-xs font-mono font-bold text-zinc-400 flex items-center justify-center select-none bg-zinc-50/30 dark:bg-zinc-900/40">
+                    {hour}
+                  </div>
+
+                  {weekDays.map((day) => {
+                    const dateStr = toDateString(day);
+                    const timedTasks = (tasksByDate[dateStr] || []).filter((t) => {
+                      if (!t.startTime) return false;
+                      const tHour = parseInt(t.startTime.split(":")[0], 10);
+                      return tHour === hourNum;
+                    });
+
+                    const slotKey = `${dateStr}-${hour}`;
+                    const isDragTarget = dragOverKey === slotKey;
+
+                    return (
+                      <div
+                        key={slotKey}
+                        onClick={() => onDateClick(dateStr, hour)}
+                        onDragOver={(e) => handleDragOver(e, slotKey)}
+                        onDragLeave={() => setDragOverKey(null)}
+                        onDrop={(e) => handleDrop(e, dateStr, hour)}
+                        className={`relative p-2 space-y-1.5 transition hover:bg-zinc-50/60 dark:hover:bg-zinc-800/40 cursor-pointer ${
+                          isDragTarget ? "bg-blue-50 dark:bg-blue-950/40 ring-2 ring-inset ring-blue-500" : ""
+                        }`}
+                      >
+                        {timedTasks.map((task) => renderTaskCard(task, true))}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
