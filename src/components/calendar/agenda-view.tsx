@@ -41,6 +41,17 @@ export function AgendaView({
 
   const sortedDates = Object.keys(groupedTasks).sort();
 
+  const getPriorityStyle = (priority?: string) => {
+    switch (priority) {
+      case "HIGH":
+        return "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800/60";
+      case "LOW":
+        return "text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-800/60";
+      default:
+        return "text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800/60";
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Search Bar */}
@@ -102,8 +113,10 @@ export function AgendaView({
                       <div
                         key={task.id}
                         onClick={() => onSelectTask(task)}
-                        className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 cursor-pointer transition ${
-                          isDone ? "opacity-60 bg-zinc-50/30" : ""
+                        className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3 cursor-pointer transition ${
+                          isDone
+                            ? "bg-zinc-50/50 dark:bg-zinc-900/60 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/50"
+                            : "bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50"
                         }`}
                       >
                         <div className="flex items-start gap-3">
@@ -113,68 +126,92 @@ export function AgendaView({
                               e.stopPropagation();
                               onToggleComplete(task.id);
                             }}
-                            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+                            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
                               isDone
-                                ? "bg-emerald-600 border-emerald-600 text-white"
-                                : "border-zinc-400 hover:border-zinc-600 dark:border-zinc-600"
+                                ? "bg-emerald-600 border-emerald-600 text-white shadow-xs"
+                                : "border-zinc-300 dark:border-zinc-600 hover:border-zinc-500 dark:hover:border-zinc-400 bg-white dark:bg-zinc-900"
                             }`}
+                            title={isDone ? "Mark as incomplete" : "Mark as complete"}
                           >
-                            {isDone && <Check className="h-3 w-3" />}
+                            {isDone && <Check className="h-3 w-3 stroke-[2.5]" />}
                           </button>
 
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
                               <span
                                 style={{ backgroundColor: task.color || "#3b82f6" }}
-                                className="h-2.5 w-2.5 rounded-full shrink-0"
+                                className={`h-2.5 w-2.5 rounded-full shrink-0 ${isDone ? "opacity-60" : ""}`}
                               />
                               <h4
-                                className={`text-sm font-semibold text-zinc-900 dark:text-zinc-100 ${
-                                  isDone ? "line-through text-zinc-500" : ""
+                                className={`text-sm font-semibold transition-colors ${
+                                  isDone
+                                    ? "line-through text-zinc-400 dark:text-zinc-400 font-normal"
+                                    : "text-zinc-900 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400"
                                 }`}
                               >
                                 {task.title}
                               </h4>
                               {(task.team || task.teamId) && (
                                 <span title={task.team?.name ? `Team: ${task.team.name}` : "Team Task"}>
-                                  <Users className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                                  <Users className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
                                 </span>
                               )}
                             </div>
 
                             {task.description && (
-                              <p className="text-xs text-zinc-500 line-clamp-1 pl-4">
+                              <p
+                                className={`text-xs line-clamp-1 pl-4.5 ${
+                                  isDone
+                                    ? "text-zinc-400 dark:text-zinc-500"
+                                    : "text-zinc-600 dark:text-zinc-300"
+                                }`}
+                              >
                                 {task.description}
                               </p>
                             )}
 
-                            <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500 pl-4 pt-0.5">
+                            <div className="flex flex-wrap items-center gap-2 text-xs pl-4.5 pt-1">
                               {(task.team || task.teamId) && (
-                                <span className="flex items-center gap-1 font-medium text-purple-600 dark:text-purple-400">
-                                  <Users className="h-3 w-3" />
-                                  <span>{task.team?.name || "Team Task"}</span>
+                                <span
+                                  className="inline-flex items-center gap-1 font-medium text-[11px] px-2 py-0.5 rounded-md border text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 border-purple-200 dark:border-purple-800/60"
+                                  title={task.team?.name ? `Team: ${task.team.name}` : "Team Task"}
+                                >
+                                  <Users className="h-3 w-3 shrink-0" />
+                                  <span className="truncate max-w-[140px]">{task.team?.name || "Team Task"}</span>
+                                </span>
+                              )}
+
+                              {task.priority && (
+                                <span
+                                  className={`inline-flex items-center gap-1 font-medium text-[11px] px-2 py-0.5 rounded-md border ${getPriorityStyle(
+                                    task.priority
+                                  )}`}
+                                >
+                                  <Flag className="h-3 w-3" />
+                                  <span>{task.priority}</span>
                                 </span>
                               )}
 
                               {task.location && (
-                                <span className="flex items-center gap-1">
-                                  <MapPin className="h-3 w-3" />
-                                  <span>{task.location}</span>
+                                <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400 px-1 py-0.5">
+                                  <MapPin className="h-3 w-3 text-zinc-400 dark:text-zinc-500" />
+                                  <span className="truncate max-w-[140px]">{task.location}</span>
                                 </span>
                               )}
-
-                              <span className="flex items-center gap-1">
-                                <Flag className="h-3 w-3" />
-                                <span>{task.priority}</span>
-                              </span>
                             </div>
                           </div>
                         </div>
 
                         {/* Timing badge */}
                         <div className="sm:text-right shrink-0 pl-7 sm:pl-0">
-                          <span className="inline-flex items-center gap-1 text-xs font-mono font-medium px-2.5 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-                            <Clock className="h-3 w-3 text-zinc-400" />
+                          <span
+                            className={`inline-flex items-center gap-1.5 text-xs font-mono font-medium px-2.5 py-1 rounded-md border shadow-xs ${
+                              isDone
+                                ? "bg-zinc-100/70 dark:bg-zinc-800/70 text-zinc-500 dark:text-zinc-400 border-zinc-200/60 dark:border-zinc-700/60"
+                                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700"
+                            }`}
+                          >
+                            <Clock className="h-3 w-3 text-zinc-400 dark:text-zinc-400" />
                             <span>{formatTaskTiming(task.startTime, task.endTime)}</span>
                           </span>
                         </div>
