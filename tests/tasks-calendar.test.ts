@@ -367,4 +367,18 @@ describe("Phase 1: Tasks and Calendar Tests (FR-03 to FR-09)", () => {
       expect(activeHours).toEqual(["07:00", "12:00", "21:00"]);
     });
   });
+
+  describe("Agenda View Date Ordering", () => {
+    it("should sort grouped agenda dates in reverse chronological order (newest first)", () => {
+      const dates = ["2026-10-20", "2026-10-22", "2026-10-21", "2026-10-15", "2026-10-25"];
+      const sortedDates = [...dates].sort((a, b) => b.localeCompare(a));
+      expect(sortedDates).toEqual([
+        "2026-10-25",
+        "2026-10-22",
+        "2026-10-21",
+        "2026-10-20",
+        "2026-10-15",
+      ]);
+    });
+  });
 });

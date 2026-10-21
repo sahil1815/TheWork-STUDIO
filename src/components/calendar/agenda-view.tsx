@@ -39,7 +39,8 @@ export function AgendaView({
     return acc;
   }, {});
 
-  const sortedDates = Object.keys(groupedTasks).sort();
+  // Reverse chronological sorting: newest dates first, older dates at the bottom
+  const sortedDates = Object.keys(groupedTasks).sort((a, b) => b.localeCompare(a));
 
   const getPriorityStyle = (priority?: string) => {
     switch (priority) {
