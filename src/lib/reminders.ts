@@ -66,7 +66,7 @@ export async function syncTaskReminderJobs(taskId: string): Promise<void> {
             reminderPreference: true,
           },
         },
-        creator: {
+        createdBy: {
           select: {
             id: true,
             email: true,
@@ -81,7 +81,7 @@ export async function syncTaskReminderJobs(taskId: string): Promise<void> {
     if (!task) return;
 
     // Recipient user is assignee (or creator for unassigned tasks)
-    const targetUser = task.assignee || task.creator;
+    const targetUser = task.assignee || task.createdBy;
     if (!targetUser) return;
 
     // 1. If task is completed (DONE) or CANCELLED, cancel all pending reminder jobs

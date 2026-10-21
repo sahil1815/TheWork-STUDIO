@@ -88,3 +88,18 @@ export const rescheduleTaskSchema = z
   });
 
 export type RescheduleTaskInput = z.infer<typeof rescheduleTaskSchema>;
+
+export const convertPersonalTaskSchema = z.object({
+  taskId: z.string().min(1, "Task ID is required"),
+  teamId: z.string().min(1, "Team is required"),
+  assigneeId: z.string().optional().nullable(),
+});
+
+export type ConvertPersonalTaskInput = z.infer<typeof convertPersonalTaskSchema>;
+
+export const penaltySettingSchema = z.object({
+  personalTasksEnabled: z.boolean().optional(),
+  teamTasksEnabled: z.boolean().optional(),
+});
+
+export type PenaltySettingInput = z.infer<typeof penaltySettingSchema>;

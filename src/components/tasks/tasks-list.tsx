@@ -6,7 +6,13 @@ import { formatTaskTiming } from "@/lib/date-utils";
 import { format, parseISO } from "date-fns";
 import { TaskModal } from "./task-modal";
 import { ProposeTaskModal } from "./propose-task-modal";
-import { toggleTaskComplete, getCalendarTasks, deleteTask } from "@/actions/task-actions";
+import { ConvertTaskModal } from "./convert-task-modal";
+import { PenaltyDashboardWidget } from "./penalty-dashboard-widget";
+import {
+  toggleTaskComplete,
+  getCalendarTasks,
+  deleteTask,
+} from "@/actions/task-actions";
 import {
   Check,
   Plus,
@@ -15,11 +21,14 @@ import {
   Clock,
   MapPin,
   Users,
-  Flag,
+  User,
   Trash2,
   Edit2,
-  Filter,
   Send,
+  ArrowUpRight,
+  AlertTriangle,
+  Layers,
+  Filter,
 } from "lucide-react";
 
 interface TeamOption {
@@ -32,16 +41,25 @@ interface TasksListProps {
   initialTasks: any[];
   teams: TeamOption[];
   currentUserId?: string;
+  initialSection?: "ALL" | "PERSONAL" | "TEAM";
+  initialTeamId?: string;
 }
 
-export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps) {
+export function TasksList({
+  initialTasks,
+  teams,
+  currentUserId,
+  initialSection = "ALL",
+  initialTeamId,
+}: TasksListProps) {
   const [tasks, setTasks] = useState<any[]>(initialTasks);
   const [search, setSearch] = useState("");
+  const [section, setSection] = useState<"ALL" | "PERSONAL" | "TEAM">(initialSection);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [priorityFilter, setPriorityFilter] = useState<string>("ALL");
-  const [teamFilter, setTeamFilter] = useState<string>("ALL");
+  const [teamFilter, setTeamFilter] = useState<string>(initialTeamId || "ALL");
 
-  // Modal State
+  // Edit / Create Task Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any | null>(null);
 
@@ -56,9 +74,26 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
     description?: string;
   } | undefined>(undefined);
 
+  // Convert Personal Task Modal State
+  const [convertModalOpen, setConvertModalOpen] = useState(false);
+  const [taskToConvert, setTaskToConvert] = useState<any | null>(null);
+
+  // Key to force refresh Penalty widget
+  const [penaltyWidgetKey, setPenaltyWidgetKey] = useState(0);
+
   const refreshTasks = async () => {
-    const updated = await getCalendarTasks(teamFilter === "ALL" ? "all" : teamFilter);
+    let filterParam = "all";
+    if (section === "PERSONAL") {
+      filterParam = "personal";
+    } else if (section === "TEAM") {
+      filterParam = teamFilter !== "ALL" ? teamFilter : "team";
+    } else {
+      filterParam = teamFilter !== "ALL" ? teamFilter : "all";
+    }
+
+    const updated = await getCalendarTasks(filterParam);
     setTasks(updated);
+    setPenaltyWidgetKey((prev) => prev + 1);
   };
 
   const handleToggle = async (taskId: string) => {
@@ -72,6 +107,8 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
     const res = await toggleTaskComplete(taskId);
     if (!res.success) {
       await refreshTasks();
+    } else {
+      setPenaltyWidgetKey((prev) => prev + 1);
     }
   };
 
@@ -84,16 +121,45 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
     if (!res.success) {
       alert(res.error || "Failed to delete task");
       await refreshTasks();
+    } else {
+      setPenaltyWidgetKey((prev) => prev + 1);
     }
   };
 
-  // Filter tasks
-  const filteredTasks = tasks.filter((t) => {
-    if (statusFilter !== "ALL" && t.status !== statusFilter) return false;
-    if (priorityFilter !== "ALL" && t.priority !== priorityFilter) return false;
-    if (teamFilter === "PERSONAL" && t.teamId !== null) return false;
-    if (teamFilter !== "ALL" && teamFilter !== "PERSONAL" && t.teamId !== teamFilter) return false;
+  const handleTaskConverted = (updatedTask: any) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === updatedTask.id ? { ...t, ...updatedTask } : t))
+    );
+    setPenaltyWidgetKey((prev) => prev + 1);
+  };
 
+  // Section Counts
+  const personalTasksCount = tasks.filter((t) => t.teamId === null).length;
+  const teamTasksCount = tasks.filter((t) => t.teamId !== null).length;
+
+  // Filter tasks based on Section, Status, Priority, Team, and Search
+  const filteredTasks = tasks.filter((t) => {
+    // 1. Strict Section Filtering
+    // Personal section: ONLY tasks with NO team (teamId === null)
+    if (section === "PERSONAL" && t.teamId !== null) return false;
+    // Team section: ONLY tasks WITH team (teamId !== null). Personal tasks NEVER appear.
+    if (section === "TEAM" && t.teamId === null) return false;
+
+    // 2. Additional Team selector (when in Team section or All Tasks)
+    if (section === "TEAM" && teamFilter !== "ALL" && t.teamId !== teamFilter) {
+      return false;
+    }
+    if (section === "ALL" && teamFilter !== "ALL" && t.teamId !== teamFilter) {
+      return false;
+    }
+
+    // 3. Status Filter
+    if (statusFilter !== "ALL" && t.status !== statusFilter) return false;
+
+    // 4. Priority Filter
+    if (priorityFilter !== "ALL" && t.priority !== priorityFilter) return false;
+
+    // 5. Search Query
     if (search) {
       const q = search.toLowerCase();
       const matchTitle = t.title.toLowerCase().includes(q);
@@ -101,6 +167,7 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
       const matchLoc = t.location && t.location.toLowerCase().includes(q);
       return matchTitle || matchDesc || matchLoc;
     }
+
     return true;
   });
 
@@ -145,6 +212,68 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
         </div>
       </div>
 
+      {/* Monthly Penalty System Widget */}
+      <PenaltyDashboardWidget
+        key={penaltyWidgetKey}
+        currentUserId={currentUserId}
+        onSettingsChanged={refreshTasks}
+        activeSection={section}
+      />
+
+      {/* Primary Section Tabs: All Tasks | Personal Tasks | Team Tasks */}
+      <div className="flex items-center border-b border-zinc-200 dark:border-zinc-800 space-x-1 sm:space-x-3">
+        <button
+          onClick={() => {
+            setSection("ALL");
+            setTeamFilter("ALL");
+          }}
+          className={`flex items-center gap-2 py-3 px-3.5 text-xs sm:text-sm font-semibold border-b-2 transition ${
+            section === "ALL"
+              ? "border-blue-600 text-blue-600 dark:text-blue-400"
+              : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:border-zinc-300"
+          }`}
+        >
+          <Layers className="h-4 w-4" />
+          <span>All Tasks</span>
+          <span className="ml-1 rounded-full px-2 py-0.5 text-[11px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+            {tasks.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => {
+            setSection("PERSONAL");
+            setTeamFilter("ALL");
+          }}
+          className={`flex items-center gap-2 py-3 px-3.5 text-xs sm:text-sm font-semibold border-b-2 transition ${
+            section === "PERSONAL"
+              ? "border-blue-600 text-blue-600 dark:text-blue-400"
+              : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:border-zinc-300"
+          }`}
+        >
+          <User className="h-4 w-4" />
+          <span>Personal Tasks</span>
+          <span className="ml-1 rounded-full px-2 py-0.5 text-[11px] font-bold bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+            {personalTasksCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setSection("TEAM")}
+          className={`flex items-center gap-2 py-3 px-3.5 text-xs sm:text-sm font-semibold border-b-2 transition ${
+            section === "TEAM"
+              ? "border-purple-600 text-purple-600 dark:text-purple-400"
+              : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:border-zinc-300"
+          }`}
+        >
+          <Users className="h-4 w-4" />
+          <span>Team Tasks</span>
+          <span className="ml-1 rounded-full px-2 py-0.5 text-[11px] font-bold bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300">
+            {teamTasksCount}
+          </span>
+        </button>
+      </div>
+
       {/* Filter Controls Bar */}
       <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm">
         {/* Search Input */}
@@ -154,10 +283,35 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search tasks..."
+            placeholder={`Search ${
+              section === "PERSONAL"
+                ? "personal tasks..."
+                : section === "TEAM"
+                ? "team tasks..."
+                : "all tasks..."
+            }`}
             className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 py-1.5 pl-9 pr-3 text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
+
+        {/* Team Selector (Only available when in Team Tasks section or All Tasks) */}
+        {section !== "PERSONAL" && teams.length > 0 && (
+          <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+            <span className="font-medium">Team:</span>
+            <select
+              value={teamFilter}
+              onChange={(e) => setTeamFilter(e.target.value)}
+              className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 px-2 py-1.5 text-xs focus:outline-none"
+            >
+              <option value="ALL">All Teams</option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Status Filter */}
         <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
@@ -189,30 +343,18 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
             <option value={TaskPriority.HIGH}>High</option>
           </select>
         </div>
-
-        {/* Team Scope Filter */}
-        <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
-          <span className="font-medium">Scope:</span>
-          <select
-            value={teamFilter}
-            onChange={(e) => setTeamFilter(e.target.value)}
-            className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 px-2 py-1.5 text-xs focus:outline-none"
-          >
-            <option value="ALL">All Tasks</option>
-            <option value="PERSONAL">Personal Only</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
 
       {/* Tasks Table / List */}
       {filteredTasks.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 p-12 text-center bg-white dark:bg-zinc-900 space-y-3">
-          <p className="text-zinc-500 text-sm">No tasks match your criteria.</p>
+          <p className="text-zinc-500 text-sm">
+            {section === "PERSONAL"
+              ? "No personal tasks match your criteria."
+              : section === "TEAM"
+              ? "No team tasks match your criteria."
+              : "No tasks match your criteria."}
+          </p>
           <button
             onClick={() => {
               setSelectedTask(null);
@@ -228,6 +370,8 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
           {filteredTasks.map((task) => {
             const isDone = task.status === "DONE";
             const dateStr = task.dateString || task.date;
+            const isPersonal = task.teamId === null;
+            const hasPenalty = !!task.penalty;
 
             return (
               <div
@@ -236,8 +380,8 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
                   isDone ? "opacity-60 bg-zinc-50/20" : ""
                 }`}
               >
-                {/* Left: Checkbox + Title + Metadata */}
-                <div className="flex items-start gap-3">
+                {/* Left: Checkbox + Title + Badges + Metadata */}
+                <div className="flex items-start gap-3 flex-1 min-w-0">
                   <button
                     type="button"
                     onClick={() => handleToggle(task.id)}
@@ -250,19 +394,42 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
                     {isDone && <Check className="h-3 w-3" />}
                   </button>
 
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                  <div className="space-y-1.5 flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span
                         style={{ backgroundColor: task.color || "#3b82f6" }}
                         className="h-2.5 w-2.5 rounded-full shrink-0"
                       />
                       <span
-                        className={`text-sm font-semibold text-zinc-900 dark:text-zinc-100 ${
+                        className={`text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate ${
                           isDone ? "line-through text-zinc-500" : ""
                         }`}
                       >
                         {task.title}
                       </span>
+
+                      {/* Personal Task Badge (shown in All Tasks view) */}
+                      {section === "ALL" && isPersonal && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                          Personal
+                        </span>
+                      )}
+
+                      {/* Team Task Badge */}
+                      {task.team && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          <span>{task.team.name}</span>
+                        </span>
+                      )}
+
+                      {/* Penalty Badge */}
+                      {hasPenalty && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          <span>Penalty Recorded</span>
+                        </span>
+                      )}
                     </div>
 
                     {task.description && (
@@ -282,10 +449,10 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
                         <span>{formatTaskTiming(task.startTime, task.endTime)}</span>
                       </span>
 
-                      {task.team && (
-                        <span className="flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400">
-                          <Users className="h-3 w-3" />
-                          <span>{task.team.name}</span>
+                      {task.assignee && (
+                        <span className="flex items-center gap-1 font-medium text-zinc-600 dark:text-zinc-400">
+                          <User className="h-3 w-3" />
+                          <span>{task.assignee.name || task.assignee.email}</span>
                         </span>
                       )}
 
@@ -312,7 +479,22 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
                 </div>
 
                 {/* Right: Actions */}
-                <div className="flex items-center gap-2 self-end sm:self-center">
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  {/* Convert to Team Task Action (Available for Personal Tasks) */}
+                  {isPersonal && teams.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setTaskToConvert(task);
+                        setConvertModalOpen(true);
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-950/40 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition shadow-2xs"
+                      title="Convert this personal task into a team task"
+                    >
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                      <span>Convert to Team Task</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => {
                       setSelectedTask(task);
@@ -323,6 +505,7 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
                   >
                     <Edit2 className="h-4 w-4" />
                   </button>
+
                   <button
                     onClick={() => handleDelete(task.id)}
                     className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
@@ -337,7 +520,7 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
         </div>
       )}
 
-      {/* Task Edit Modal */}
+      {/* Task Edit / Create Modal */}
       <TaskModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -353,6 +536,21 @@ export function TasksList({ initialTasks, teams, currentUserId }: TasksListProps
             : undefined
         }
       />
+
+      {/* Convert Personal Task Modal */}
+      {convertModalOpen && taskToConvert && (
+        <ConvertTaskModal
+          isOpen={convertModalOpen}
+          onClose={() => {
+            setConvertModalOpen(false);
+            setTaskToConvert(null);
+          }}
+          task={taskToConvert}
+          teams={teams}
+          currentUserId={currentUserId}
+          onSuccess={handleTaskConverted}
+        />
+      )}
 
       {/* Propose Task Modal */}
       {proposeModalOpen && currentUserId && (

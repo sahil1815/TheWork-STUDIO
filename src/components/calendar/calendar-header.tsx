@@ -104,6 +104,7 @@ export function CalendarHeader({
           >
             <option value="all">All Calendars</option>
             <option value="personal">Personal Tasks Only</option>
+            <option value="team">All Team Tasks</option>
             {teams.length > 0 && (
               <optgroup label="Teams">
                 {teams.map((t) => (

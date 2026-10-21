@@ -30,6 +30,11 @@ enum TaskStatus {
   CANCELLED
 }
 
+enum TaskType {
+  PERSONAL
+  TEAM
+}
+
 enum TaskPriority {
   LOW
   MEDIUM
@@ -93,6 +98,8 @@ model User {
   taskReminderOverrides  TaskReminderOverride[]
   reminderJobs           ReminderJob[]
   notifications          Notification[]
+  penaltySetting         PenaltySetting?
+  penalties              TaskPenalty[]            @relation("UserPenalties")
 
   @@map("users")
 }
@@ -146,6 +153,7 @@ model Team {
   invitations TeamInvitation[]
   tasks       Task[]
   proposals   TaskProposal[]
+  penalties   TaskPenalty[]
 
   @@map("teams")
 }
@@ -213,6 +221,7 @@ model Task {
   sourceProposal    TaskProposal?          @relation("ResultingTask", fields: [sourceProposalId], references: [id], onDelete: SetNull)
   reminderJobs      ReminderJob[]
   reminderOverrides TaskReminderOverride[]
+  penalty           TaskPenalty?
 
   @@index([assigneeId, date])
   @@index([teamId, date])
@@ -352,3 +361,41 @@ model Notification {
   @@index([userId, read])
   @@map("notifications")
 }
+
+model PenaltySetting {
+  id                   String   @id @default(cuid())
+  userId               String   @unique @map("user_id")
+  personalTasksEnabled Boolean  @default(true) @map("personal_tasks_enabled")
+  teamTasksEnabled     Boolean  @default(true) @map("team_tasks_enabled")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("penalty_settings")
+}
+
+model TaskPenalty {
+  id          String   @id @default(cuid())
+  taskId      String   @unique @map("task_id")
+  taskType    TaskType @map("task_type")
+  userId      String   @map("user_id")
+  teamId      String?  @map("team_id")
+  penaltyDate DateTime @default(now()) @map("penalty_date")
+  deadline    DateTime @map("deadline")
+  monthYear   String   @map("month_year")
+  year        Int      @map("year")
+  month       Int      @map("month")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  task Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User  @relation("UserPenalties", fields: [userId], references: [id], onDelete: Cascade)
+  team Team? @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([userId, monthYear])
+  @@index([teamId, monthYear])
+  @@index([taskType, monthYear])
+  @@map("task_penalties")
+}
+

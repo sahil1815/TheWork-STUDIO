@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { TaskStatus, TaskPriority } from "@prisma/client";
-import { createBatchTasks, updateTask, deleteTask } from "@/actions/task-actions";
+import { createBatchTasks, updateTask, deleteTask, convertPersonalTaskToTeamTask } from "@/actions/task-actions";
 import { toDateString } from "@/lib/date-utils";
 import {
   X,
@@ -232,6 +232,17 @@ export function TaskModal({
           setError(result.error || "An error occurred");
           setLoading(false);
           return;
+        }
+
+        if (editTeamId && !taskToEdit.teamId) {
+          const convResult = await convertPersonalTaskToTeamTask(taskToEdit.id, {
+            teamId: editTeamId,
+          });
+          if (!convResult.success) {
+            setError(convResult.error || "Failed to convert to team task");
+            setLoading(false);
+            return;
+          }
         }
 
         onTaskSaved?.();
@@ -532,6 +543,43 @@ export function TaskModal({
                     />
                   ))}
                 </div>
+              </div>
+
+              {/* Task Classification (Personal vs Team) */}
+              <div>
+                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                  <Users className="h-3 w-3" /> Task Classification
+                </label>
+                {taskToEdit.teamId ? (
+                  <div className="flex items-center gap-2 p-2 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/30 text-xs text-purple-700 dark:text-purple-300">
+                    <Users className="h-4 w-4" />
+                    <span>
+                      Team Task: <strong>{taskToEdit.team?.name || "Assigned Team"}</strong>
+                    </span>
+                  </div>
+                ) : (
+                  <div>
+                    <select
+                      value={editTeamId}
+                      onChange={(e) => setEditTeamId(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">Personal Task (No Team)</option>
+                      {teams
+                        .filter((t) => t.role !== "GUEST")
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>
+                            Convert to Team: {t.name}
+                          </option>
+                        ))}
+                    </select>
+                    {editTeamId && (
+                      <p className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-1 font-medium">
+                        Saving will convert this personal task into a team task.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Description */}

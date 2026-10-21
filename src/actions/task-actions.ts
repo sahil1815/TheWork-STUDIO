@@ -2,12 +2,28 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { taskSchema, rescheduleTaskSchema, batchTasksSchema, TaskInput, BatchTasksInput, RescheduleTaskInput } from "@/lib/validations/task";
+import {
+  taskSchema,
+  rescheduleTaskSchema,
+  batchTasksSchema,
+  convertPersonalTaskSchema,
+  penaltySettingSchema,
+  TaskInput,
+  BatchTasksInput,
+  RescheduleTaskInput,
+  ConvertPersonalTaskInput,
+} from "@/lib/validations/task";
 import { parseDateString, toDateString } from "@/lib/date-utils";
 import { revalidatePath } from "next/cache";
-import { Role, TaskStatus } from "@prisma/client";
+import { Role, TaskStatus, TaskType } from "@prisma/client";
 import { can } from "@/lib/permissions";
 import { syncTaskReminderJobs } from "@/lib/reminders";
+import {
+  syncSingleTaskPenalty,
+  evaluateAndSyncUserPenalties,
+  getOrCreatePenaltySettings,
+  getMonthlyPenaltySummary,
+} from "@/lib/penalties";
 
 /**
  * Verify user is authenticated and return user id
@@ -74,6 +90,7 @@ export async function createPersonalTask(rawInput: TaskInput) {
     });
 
     await syncTaskReminderJobs(task.id);
+    await syncSingleTaskPenalty(task.id);
 
     revalidatePath("/calendar");
     revalidatePath("/tasks");
@@ -155,6 +172,7 @@ export async function createBatchTasks(rawInputs: TaskInput[]) {
 
     for (const created of createdTasks) {
       await syncTaskReminderJobs(created.id);
+      await syncSingleTaskPenalty(created.id);
     }
 
     revalidatePath("/calendar");
@@ -206,6 +224,7 @@ export async function updateTask(taskId: string, rawInput: TaskInput) {
     });
 
     await syncTaskReminderJobs(updatedTask.id);
+    await syncSingleTaskPenalty(updatedTask.id);
 
     revalidatePath("/calendar");
     revalidatePath("/tasks");
@@ -245,6 +264,7 @@ export async function toggleTaskComplete(taskId: string) {
     });
 
     await syncTaskReminderJobs(task.id);
+    await syncSingleTaskPenalty(task.id);
 
     revalidatePath("/calendar");
     revalidatePath("/tasks");
@@ -321,6 +341,7 @@ export async function rescheduleTask(rawInput: RescheduleTaskInput) {
     });
 
     await syncTaskReminderJobs(task.id);
+    await syncSingleTaskPenalty(task.id);
 
     revalidatePath("/calendar");
     revalidatePath("/tasks");
@@ -333,19 +354,34 @@ export async function rescheduleTask(rawInput: RescheduleTaskInput) {
 
 /**
  * Fetch calendar tasks (FR-07, FR-08)
- * Filter: 'all' | 'personal' | teamId
+ * Filter: 'all' | 'personal' | 'team' | teamId
  */
 export async function getCalendarTasks(filter: string = "all") {
   try {
     const userId = await getAuthUserId();
 
+    // Ensure penalties are evaluated up-to-date
+    await evaluateAndSyncUserPenalties(userId);
+
+    const userMemberships = await db.teamMember.findMany({
+      where: { userId },
+      select: { teamId: true },
+    });
+    const userTeamIds = userMemberships.map((m) => m.teamId);
+
     // Determine query conditions
     let whereCondition: any;
 
     if (filter === "personal") {
+      // Personal tasks: teamId must be null
       whereCondition = {
-        assigneeId: userId,
         teamId: null,
+        OR: [{ assigneeId: userId }, { createdById: userId }],
+      };
+    } else if (filter === "team" || filter === "teams") {
+      // Team tasks: only tasks with teamId in user's teams, strictly team tasks
+      whereCondition = {
+        teamId: { in: userTeamIds, not: null },
       };
     } else if (filter !== "all") {
       // Specific team filter: ensure user is member of this team
@@ -359,18 +395,13 @@ export async function getCalendarTasks(filter: string = "all") {
       };
     } else {
       // 'all': personal tasks for user OR team tasks for teams user belongs to
-      const userMemberships = await db.teamMember.findMany({
-        where: { userId },
-        select: { teamId: true },
-      });
-      const userTeamIds = userMemberships.map((m) => m.teamId);
-
       whereCondition = {
         OR: [
           // Personal tasks
-          { assigneeId: userId, teamId: null },
+          { teamId: null, assigneeId: userId },
+          { teamId: null, createdById: userId },
           // Team tasks in teams user belongs to
-          { teamId: { in: userTeamIds } },
+          { teamId: { in: userTeamIds, not: null } },
         ],
       };
     }
@@ -381,6 +412,7 @@ export async function getCalendarTasks(filter: string = "all") {
         team: { select: { id: true, name: true } },
         assignee: { select: { id: true, name: true, email: true } },
         createdBy: { select: { id: true, name: true, email: true } },
+        penalty: true,
       },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     });
@@ -393,6 +425,229 @@ export async function getCalendarTasks(filter: string = "all") {
   } catch (error) {
     console.error("Get calendar tasks error:", error);
     return [];
+  }
+}
+
+/**
+ * Convert an existing personal task into a team task
+ */
+export async function convertPersonalTaskToTeamTask(
+  taskId: string,
+  rawInput: { teamId: string; assigneeId?: string | null }
+) {
+  try {
+    const userId = await getAuthUserId();
+    const validated = convertPersonalTaskSchema.parse({
+      taskId,
+      ...rawInput,
+    });
+
+    const existingTask = await db.task.findUnique({
+      where: { id: taskId },
+      include: { penalty: true },
+    });
+
+    if (!existingTask) {
+      return { success: false, error: "Task not found." };
+    }
+
+    if (existingTask.teamId !== null) {
+      return { success: false, error: "Task is already a team task." };
+    }
+
+    const authorized = await canModifyTask(userId, existingTask);
+    if (!authorized) {
+      return { success: false, error: "You do not have permission to modify this task." };
+    }
+
+    // Verify user membership in destination team
+    const membership = await db.teamMember.findUnique({
+      where: {
+        teamId_userId: {
+          teamId: validated.teamId,
+          userId,
+        },
+      },
+    });
+
+    if (!membership) {
+      return { success: false, error: "You are not a member of the selected team." };
+    }
+
+    if (!can(membership.role, "CREATE_TEAM_TASK")) {
+      return {
+        success: false,
+        error: "Guests cannot create or convert tasks in this team.",
+      };
+    }
+
+    // Determine target assignee (default to current user if unspecified)
+    let targetAssigneeId = userId;
+    if (validated.assigneeId && validated.assigneeId.trim() !== "") {
+      const targetMembership = await db.teamMember.findUnique({
+        where: {
+          teamId_userId: {
+            teamId: validated.teamId,
+            userId: validated.assigneeId,
+          },
+        },
+      });
+      if (!targetMembership) {
+        return { success: false, error: "The selected assignee is not a member of this team." };
+      }
+      targetAssigneeId = validated.assigneeId;
+    }
+
+    // Update the task to team task
+    const updatedTask = await db.task.update({
+      where: { id: taskId },
+      data: {
+        teamId: validated.teamId,
+        assigneeId: targetAssigneeId,
+      },
+      include: {
+        team: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true, email: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
+        penalty: true,
+      },
+    });
+
+    // If task had a penalty, update it to reflect team task classification & assignee
+    if (existingTask.penalty) {
+      await db.taskPenalty.update({
+        where: { taskId: existingTask.id },
+        data: {
+          taskType: TaskType.TEAM,
+          teamId: validated.teamId,
+          userId: targetAssigneeId,
+        },
+      });
+    }
+
+    // Sync reminders & penalty
+    await syncTaskReminderJobs(updatedTask.id);
+    await syncSingleTaskPenalty(updatedTask.id);
+
+    revalidatePath("/calendar");
+    revalidatePath("/tasks");
+    revalidatePath(`/teams/${validated.teamId}`);
+
+    return {
+      success: true,
+      task: {
+        ...updatedTask,
+        dateString: toDateString(updatedTask.date),
+      },
+    };
+  } catch (error: unknown) {
+    console.error("Convert task error:", error);
+    const message = error instanceof Error ? error.message : "Failed to convert task";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Get members of a specific team (for assigning converted team tasks)
+ */
+export async function getTeamMembers(teamId: string) {
+  try {
+    const userId = await getAuthUserId();
+    const membership = await db.teamMember.findUnique({
+      where: {
+        teamId_userId: { teamId, userId },
+      },
+    });
+
+    if (!membership) return [];
+
+    const members = await db.teamMember.findMany({
+      where: { teamId },
+      include: {
+        user: { select: { id: true, name: true, email: true, image: true } },
+      },
+      orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+    });
+
+    return members.map((m) => ({
+      id: m.user.id,
+      name: m.user.name,
+      email: m.user.email,
+      role: m.role,
+    }));
+  } catch (error) {
+    console.error("Get team members error:", error);
+    return [];
+  }
+}
+
+/**
+ * Get penalty settings for current user
+ */
+export async function getPenaltySettingsAction() {
+  try {
+    const userId = await getAuthUserId();
+    const settings = await getOrCreatePenaltySettings(userId);
+    return { success: true, settings };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to load penalty settings";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Update independent penalty toggles for personal or team tasks
+ */
+export async function updatePenaltySettingsAction(rawInput: {
+  personalTasksEnabled?: boolean;
+  teamTasksEnabled?: boolean;
+}) {
+  try {
+    const userId = await getAuthUserId();
+    const validated = penaltySettingSchema.parse(rawInput);
+
+    const settings = await db.penaltySetting.upsert({
+      where: { userId },
+      create: {
+        userId,
+        personalTasksEnabled: validated.personalTasksEnabled ?? true,
+        teamTasksEnabled: validated.teamTasksEnabled ?? true,
+      },
+      update: {
+        ...(validated.personalTasksEnabled !== undefined && {
+          personalTasksEnabled: validated.personalTasksEnabled,
+        }),
+        ...(validated.teamTasksEnabled !== undefined && {
+          teamTasksEnabled: validated.teamTasksEnabled,
+        }),
+      },
+    });
+
+    // Re-evaluate penalties after setting change
+    await evaluateAndSyncUserPenalties(userId);
+
+    revalidatePath("/tasks");
+    revalidatePath("/calendar");
+
+    return { success: true, settings };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update penalty settings";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Get monthly penalty counts and history records
+ */
+export async function getPenaltySummaryAction(monthYear?: string, teamId?: string) {
+  try {
+    const userId = await getAuthUserId();
+    await evaluateAndSyncUserPenalties(userId);
+    const summary = await getMonthlyPenaltySummary(userId, monthYear, teamId);
+    return { success: true, summary };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to load penalty summary";
+    return { success: false, error: message };
   }
 }
 
