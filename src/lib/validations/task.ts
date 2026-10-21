@@ -26,6 +26,7 @@ export const taskSchema = z
     location: z.string().max(255).optional().nullable(),
     color: z.string().max(50).optional().nullable(),
     teamId: z.string().optional().nullable(),
+    assigneeId: z.string().optional().nullable(),
   })
   .superRefine((data, ctx) => {
     const hasStart = !!data.startTime && data.startTime.trim() !== "";

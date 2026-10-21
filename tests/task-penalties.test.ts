@@ -99,6 +99,21 @@ describe("Task Management System Fixes & Monthly Penalty System", () => {
       expect(convertedTask.teamId).toBe(targetTeamId);
       expect(convertedTask.assigneeId).toBe(targetAssigneeId);
     });
+
+    it("should accept assigneeId in taskSchema for team task assignment and updates", () => {
+      const parsed = taskSchema.safeParse({
+        title: "Sprint Retrospective Analysis",
+        date: "2026-10-22",
+        teamId: "team-eng",
+        assigneeId: "user-charlie",
+      });
+
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.data.assigneeId).toBe("user-charlie");
+        expect(parsed.data.teamId).toBe("team-eng");
+      }
+    });
   });
 
   describe("2. Filtering Logic: Team Tasks Section Exclusivity", () => {

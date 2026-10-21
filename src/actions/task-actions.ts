@@ -84,8 +84,14 @@ export async function createPersonalTask(rawInput: TaskInput) {
         location: validated.location?.trim() || null,
         color: validated.color || "#3b82f6",
         createdById: userId,
-        assigneeId: userId,
+        assigneeId: validated.assigneeId || userId,
         teamId: validated.teamId || null,
+      },
+      include: {
+        team: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true, email: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
+        penalty: true,
       },
     });
 
@@ -161,8 +167,14 @@ export async function createBatchTasks(rawInputs: TaskInput[]) {
             location: t.location?.trim() || null,
             color: t.color || "#3b82f6",
             createdById: userId,
-            assigneeId: userId,
+            assigneeId: t.assigneeId || userId,
             teamId: t.teamId || null,
+          },
+          include: {
+            team: { select: { id: true, name: true } },
+            assignee: { select: { id: true, name: true, email: true } },
+            createdBy: { select: { id: true, name: true, email: true } },
+            penalty: true,
           },
         });
         list.push(created);
@@ -220,8 +232,24 @@ export async function updateTask(taskId: string, rawInput: TaskInput) {
         priority: validated.priority,
         location: validated.location?.trim() || null,
         color: validated.color || existingTask.color,
+        ...(validated.assigneeId !== undefined && {
+          assigneeId: validated.assigneeId || null,
+        }),
+      },
+      include: {
+        team: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true, email: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
+        penalty: true,
       },
     });
+
+    if (validated.assigneeId && validated.assigneeId !== existingTask.assigneeId) {
+      await db.taskPenalty.updateMany({
+        where: { taskId: updatedTask.id },
+        data: { userId: validated.assigneeId },
+      });
+    }
 
     await syncTaskReminderJobs(updatedTask.id);
     await syncSingleTaskPenalty(updatedTask.id);
@@ -261,6 +289,12 @@ export async function toggleTaskComplete(taskId: string) {
     const task = await db.task.update({
       where: { id: taskId },
       data: { status: newStatus },
+      include: {
+        team: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true, email: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
+        penalty: true,
+      },
     });
 
     await syncTaskReminderJobs(task.id);
@@ -337,6 +371,12 @@ export async function rescheduleTask(rawInput: RescheduleTaskInput) {
         date: newDate,
         startTime: validated.startTime !== undefined ? validated.startTime : existingTask.startTime,
         endTime: validated.endTime !== undefined ? validated.endTime : existingTask.endTime,
+      },
+      include: {
+        team: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true, email: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
+        penalty: true,
       },
     });
 

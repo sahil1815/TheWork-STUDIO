@@ -2,7 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { TaskStatus, TaskPriority } from "@prisma/client";
-import { createBatchTasks, updateTask, deleteTask, convertPersonalTaskToTeamTask } from "@/actions/task-actions";
+import {
+  createBatchTasks,
+  updateTask,
+  deleteTask,
+  convertPersonalTaskToTeamTask,
+  getTeamMembers,
+} from "@/actions/task-actions";
 import { toDateString } from "@/lib/date-utils";
 import {
   X,
@@ -19,6 +25,8 @@ import {
   ChevronUp,
   Layers,
   Users,
+  User,
+  UserCheck,
   Send,
 } from "lucide-react";
 
@@ -110,6 +118,11 @@ export function TaskModal({
   const [editLocation, setEditLocation] = useState("");
   const [editColor, setEditColor] = useState("#3b82f6");
   const [editTeamId, setEditTeamId] = useState<string>("");
+  const [editAssigneeId, setEditAssigneeId] = useState<string>("");
+  const [teamMembers, setTeamMembers] = useState<
+    { id: string; name: string | null; email: string; role: string }[]
+  >([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
 
   // Multiple task creation drafts
   const [tasks, setTasks] = useState<TaskDraft[]>([]);
@@ -129,11 +142,42 @@ export function TaskModal({
       setEditLocation(taskToEdit.location || "");
       setEditColor(taskToEdit.color || "#3b82f6");
       setEditTeamId(taskToEdit.teamId || "");
+      setEditAssigneeId(taskToEdit.assigneeId || "");
+
+      const activeTeamId = taskToEdit.teamId;
+      if (activeTeamId) {
+        setLoadingMembers(true);
+        getTeamMembers(activeTeamId)
+          .then((members) => {
+            setTeamMembers(members);
+          })
+          .catch(() => {})
+          .finally(() => setLoadingMembers(false));
+      } else {
+        setTeamMembers([]);
+      }
     } else {
       setTasks([createEmptyDraft(defaultDate, defaultStartTime)]);
+      setTeamMembers([]);
     }
     setError(null);
   }, [taskToEdit, defaultDate, defaultStartTime, isOpen]);
+
+  // When converting a personal task to a team in edit mode, fetch members of that team
+  useEffect(() => {
+    if (isEditing && !taskToEdit?.teamId && editTeamId) {
+      setLoadingMembers(true);
+      getTeamMembers(editTeamId)
+        .then((members) => {
+          setTeamMembers(members);
+          if (members.length > 0 && !editAssigneeId) {
+            setEditAssigneeId(members[0].id);
+          }
+        })
+        .catch(() => {})
+        .finally(() => setLoadingMembers(false));
+    }
+  }, [editTeamId, isEditing, taskToEdit?.teamId]);
 
   if (!isOpen) return null;
 
@@ -225,6 +269,7 @@ export function TaskModal({
           location: editLocation || null,
           color: editColor,
           teamId: editTeamId || null,
+          assigneeId: editAssigneeId || undefined,
         };
 
         const result = await updateTask(taskToEdit.id, payload);
@@ -237,6 +282,7 @@ export function TaskModal({
         if (editTeamId && !taskToEdit.teamId) {
           const convResult = await convertPersonalTaskToTeamTask(taskToEdit.id, {
             teamId: editTeamId,
+            assigneeId: editAssigneeId || undefined,
           });
           if (!convResult.success) {
             setError(convResult.error || "Failed to convert to team task");
@@ -551,14 +597,79 @@ export function TaskModal({
                   <Users className="h-3 w-3" /> Task Classification
                 </label>
                 {taskToEdit.teamId ? (
-                  <div className="flex items-center gap-2 p-2 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/30 text-xs text-purple-700 dark:text-purple-300">
-                    <Users className="h-4 w-4" />
-                    <span>
-                      Team Task: <strong>{taskToEdit.team?.name || "Assigned Team"}</strong>
-                    </span>
+                  <div className="rounded-xl border border-purple-200 dark:border-purple-800/80 bg-purple-50/50 dark:bg-purple-950/30 p-3.5 text-xs space-y-3">
+                    {/* Team Scope Header */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300 font-semibold">
+                        <Users className="h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400" />
+                        <span>
+                          Team Task: <strong className="text-zinc-900 dark:text-zinc-100 font-bold">{taskToEdit.team?.name || "Assigned Team"}</strong>
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300">
+                        Team Workspace
+                      </span>
+                    </div>
+
+                    {/* Member Attribution: Assigned To & Created By */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2.5 border-t border-purple-200/60 dark:border-purple-800/60">
+                      {/* Assigned To */}
+                      <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/90 dark:bg-zinc-800/90 border border-purple-100 dark:border-purple-900/40 shadow-2xs">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/80 text-purple-700 dark:text-purple-300 mt-0.5">
+                          <UserCheck className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <span className="block text-[10px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-400">
+                            Assigned To
+                          </span>
+                          {teamMembers.length > 0 ? (
+                            <select
+                              value={editAssigneeId}
+                              onChange={(e) => setEditAssigneeId(e.target.value)}
+                              className="w-full rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-850 px-2 py-1 text-xs font-semibold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                            >
+                              {teamMembers.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name || m.email} ({m.role.toLowerCase()})
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="block text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                              {taskToEdit.assignee?.name || taskToEdit.assignee?.email || "Unassigned"}
+                            </span>
+                          )}
+                          {taskToEdit.assignee?.email && (
+                            <span className="block text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
+                              {taskToEdit.assignee.email}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Created By */}
+                      <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/90 dark:bg-zinc-800/90 border border-purple-100 dark:border-purple-900/40 shadow-2xs">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 mt-0.5">
+                          <User className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <span className="block text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
+                            Created By
+                          </span>
+                          <span className="block text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                            {taskToEdit.createdBy?.name || taskToEdit.createdBy?.email || "Team Member"}
+                          </span>
+                          {taskToEdit.createdBy?.email && (
+                            <span className="block text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
+                              {taskToEdit.createdBy.email}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <div>
+                  <div className="space-y-2">
                     <select
                       value={editTeamId}
                       onChange={(e) => setEditTeamId(e.target.value)}
@@ -573,10 +684,42 @@ export function TaskModal({
                           </option>
                         ))}
                     </select>
+
+                    {/* If converting, show assignee selector */}
                     {editTeamId && (
-                      <p className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-1 font-medium">
-                        Saving will convert this personal task into a team task.
-                      </p>
+                      <div className="p-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/30 space-y-2 text-xs">
+                        <p className="text-[11px] text-indigo-700 dark:text-indigo-300 font-semibold">
+                          Assign this task to a team member:
+                        </p>
+                        {loadingMembers ? (
+                          <p className="text-[11px] text-zinc-400">Loading members...</p>
+                        ) : (
+                          <select
+                            value={editAssigneeId}
+                            onChange={(e) => setEditAssigneeId(e.target.value)}
+                            className="w-full rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          >
+                            {teamMembers.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name || m.email} ({m.role.toLowerCase()})
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        <p className="text-[10px] text-indigo-600 dark:text-indigo-400">
+                          Saving will convert this personal task into a team task.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Creator display for personal tasks */}
+                    {taskToEdit.createdBy && (
+                      <div className="flex items-center gap-2 px-1 text-xs text-zinc-500">
+                        <User className="h-3.5 w-3.5 text-zinc-400" />
+                        <span>
+                          Created by: <strong>{taskToEdit.createdBy.name || taskToEdit.createdBy.email}</strong>
+                        </span>
+                      </div>
                     )}
                   </div>
                 )}
