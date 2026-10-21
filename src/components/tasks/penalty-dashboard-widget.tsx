@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   Shield,
@@ -17,6 +18,7 @@ import {
   Info,
   CheckCircle2,
   Loader2,
+  ArrowUpRight,
 } from "lucide-react";
 import {
   getPenaltySettingsAction,
@@ -37,10 +39,7 @@ export function PenaltyDashboardWidget({
   activeSection = "ALL",
 }: PenaltyDashboardWidgetProps) {
   const [personalEnabled, setPersonalEnabled] = useState(true);
-  const [teamEnabled, setTeamEnabled] = useState(true);
-  const [canEditTeam, setCanEditTeam] = useState(true);
   const [togglingPersonal, setTogglingPersonal] = useState(false);
-  const [togglingTeam, setTogglingTeam] = useState(false);
 
   const [summary, setSummary] = useState<any | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(true);
@@ -60,10 +59,6 @@ export function PenaltyDashboardWidget({
 
       if (settingsRes.success && settingsRes.settings) {
         setPersonalEnabled(settingsRes.settings.personalTasksEnabled);
-        setTeamEnabled(settingsRes.settings.teamTasksEnabled);
-      }
-      if (settingsRes.success && settingsRes.canEditTeamPenalties !== undefined) {
-        setCanEditTeam(settingsRes.canEditTeamPenalties);
       }
 
       if (summaryRes.success && summaryRes.summary) {
@@ -97,21 +92,6 @@ export function PenaltyDashboardWidget({
       onSettingsChanged?.();
     }
     setTogglingPersonal(false);
-  };
-
-  const handleToggleTeam = async () => {
-    setTogglingTeam(true);
-    const nextVal = !teamEnabled;
-    setTeamEnabled(nextVal);
-    const res = await updatePenaltySettingsAction({ teamTasksEnabled: nextVal });
-    if (!res.success) {
-      setTeamEnabled(!nextVal);
-      alert(res.error || "Failed to update setting");
-    } else {
-      await loadData(selectedMonth);
-      onSettingsChanged?.();
-    }
-    setTogglingTeam(false);
   };
 
   const handleMonthChange = async (monthStr: string) => {
@@ -230,14 +210,8 @@ export function PenaltyDashboardWidget({
             </p>
           </div>
 
-          {/* 2. Team Task Penalty Box */}
-          <div
-            className={`p-3.5 rounded-lg border transition ${
-              teamEnabled
-                ? "border-purple-200 dark:border-purple-900/60 bg-purple-50/40 dark:bg-purple-950/20"
-                : "border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-800/40 opacity-75"
-            }`}
-          >
+          {/* 2. Team Task Penalty Box (Configured and viewed inside Teams) */}
+          <div className="p-3.5 rounded-lg border border-purple-200 dark:border-purple-900/60 bg-purple-50/40 dark:bg-purple-950/20">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-purple-600 dark:text-purple-400" />
@@ -246,29 +220,15 @@ export function PenaltyDashboardWidget({
                 </span>
               </div>
 
-              {/* Independent Toggle Switch */}
-              <label
-                className={`relative inline-flex items-center ${
-                  !canEditTeam ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-                }`}
-                title={
-                  !canEditTeam
-                    ? "Editable only by Master Admin and Admin"
-                    : "Toggle team task penalties"
-                }
+              {/* View in Teams Link (No editing toggle on task page) */}
+              <Link
+                href="/teams"
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 dark:text-purple-300 hover:text-purple-800 dark:hover:text-purple-200 hover:underline"
+                title="View and configure team penalties inside team management"
               >
-                <input
-                  type="checkbox"
-                  checked={teamEnabled}
-                  onChange={handleToggleTeam}
-                  disabled={!canEditTeam || togglingTeam}
-                  className="sr-only peer"
-                />
-                <div className="w-8 h-4 bg-zinc-300 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-600"></div>
-                <span className="ml-2 text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
-                  {teamEnabled ? "ON" : "OFF"}
-                </span>
-              </label>
+                <span>Manage in Teams</span>
+                <ArrowUpRight className="h-3 w-3" />
+              </Link>
             </div>
 
             <div className="flex items-baseline justify-between mt-2.5">
@@ -277,12 +237,8 @@ export function PenaltyDashboardWidget({
                 {loadingSummary ? "—" : summary?.currentCounts?.team ?? 0}
               </span>
             </div>
-            <p className="text-[10px] text-zinc-400 mt-1">
-              {!canEditTeam
-                ? "Editable only by Master Admin and Admin."
-                : teamEnabled
-                ? "Active: Associated with the responsible member assigned."
-                : "Disabled: Team tasks will not incur penalties."}
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">
+              Configured inside each Team. Only Master Admin and Admins can edit team penalty settings.
             </p>
           </div>
         </div>
