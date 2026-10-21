@@ -135,6 +135,11 @@ export function AgendaView({
                               >
                                 {task.title}
                               </h4>
+                              {(task.team || task.teamId) && (
+                                <span title={task.team?.name ? `Team: ${task.team.name}` : "Team Task"}>
+                                  <Users className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                                </span>
+                              )}
                             </div>
 
                             {task.description && (
@@ -144,10 +149,10 @@ export function AgendaView({
                             )}
 
                             <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500 pl-4 pt-0.5">
-                              {task.team && (
-                                <span className="flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400">
+                              {(task.team || task.teamId) && (
+                                <span className="flex items-center gap-1 font-medium text-purple-600 dark:text-purple-400">
                                   <Users className="h-3 w-3" />
-                                  <span>{task.team.name}</span>
+                                  <span>{task.team?.name || "Team Task"}</span>
                                 </span>
                               )}
 

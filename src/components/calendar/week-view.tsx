@@ -147,9 +147,14 @@ export function WeekView({
                   >
                     {task.status === "DONE" && <Check className="h-2 w-2" />}
                   </button>
-                  <span className={`truncate text-[11px] font-medium ${task.status === "DONE" ? "line-through opacity-60" : ""}`}>
+                  <span className={`truncate flex-1 text-[11px] font-medium ${task.status === "DONE" ? "line-through opacity-60" : ""}`}>
                     {task.title}
                   </span>
+                  {(task.team || task.teamId) && (
+                    <span title={task.team?.name ? `Team: ${task.team.name}` : "Team Task"}>
+                      <Users className="h-3 w-3 text-zinc-400 shrink-0" />
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
@@ -222,14 +227,18 @@ export function WeekView({
                             >
                               {isDone && <Check className="h-2 w-2" />}
                             </button>
-                            <span className="font-semibold truncate text-[11px] text-zinc-900 dark:text-zinc-100">
+                            <span className="font-semibold truncate flex-1 text-[11px] text-zinc-900 dark:text-zinc-100">
                               {task.title}
                             </span>
+                            {(task.team || task.teamId) && (
+                              <span title={task.team?.name ? `Team: ${task.team.name}` : "Team Task"}>
+                                <Users className="h-3 w-3 text-zinc-400 shrink-0" />
+                              </span>
+                            )}
                           </div>
 
                           <div className="flex items-center gap-2 text-[10px] text-zinc-500">
                             <span>{formatTaskTiming(task.startTime, task.endTime)}</span>
-                            {task.team && <Users className="h-2.5 w-2.5" />}
                             {task.location && <MapPin className="h-2.5 w-2.5" />}
                           </div>
                         </div>

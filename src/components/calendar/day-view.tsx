@@ -112,6 +112,11 @@ export function DayView({
                   <span className={`text-sm font-semibold ${task.status === "DONE" ? "line-through opacity-60" : ""}`}>
                     {task.title}
                   </span>
+                  {(task.team || task.teamId) && (
+                    <span title={task.team?.name ? `Team: ${task.team.name}` : "Team Task"}>
+                      <Users className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -181,6 +186,11 @@ export function DayView({
                           <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
                             {task.title}
                           </span>
+                          {(task.team || task.teamId) && (
+                            <span title={task.team?.name ? `Team: ${task.team.name}` : "Team Task"}>
+                              <Users className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono">
@@ -191,10 +201,10 @@ export function DayView({
 
                       {/* Metadata */}
                       <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-zinc-600 dark:text-zinc-400">
-                        {task.team && (
-                          <span className="flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400">
+                        {(task.team || task.teamId) && (
+                          <span className="flex items-center gap-1 font-medium text-purple-600 dark:text-purple-400">
                             <Users className="h-3.5 w-3.5" />
-                            <span>{task.team.name}</span>
+                            <span>{task.team?.name || "Team Task"}</span>
                           </span>
                         )}
 

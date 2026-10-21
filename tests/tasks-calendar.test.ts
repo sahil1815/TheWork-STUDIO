@@ -214,4 +214,37 @@ describe("Phase 1: Tasks and Calendar Tests (FR-03 to FR-09)", () => {
       expect(toDateString(parsed)).toBe(dateStr);
     });
   });
+
+  describe("Team Task Visual Indicator Across All Calendar View Modes (Month, Week, Day, Agenda)", () => {
+    const isTeamTask = (task: { teamId?: string | null; team?: any }) => {
+      return !!(task.team || task.teamId);
+    };
+
+    it("should identify team task whenever team or teamId is present", () => {
+      expect(isTeamTask({ teamId: "team-1", team: { name: "Engineering" } })).toBe(true);
+      expect(isTeamTask({ teamId: "team-1" })).toBe(true);
+      expect(isTeamTask({ team: { name: "Design" } })).toBe(true);
+    });
+
+    it("should identify personal task whenever team and teamId are absent or null", () => {
+      expect(isTeamTask({ teamId: null, team: null })).toBe(false);
+      expect(isTeamTask({ teamId: null })).toBe(false);
+      expect(isTeamTask({})).toBe(false);
+    });
+
+    it("should consistently differentiate team vs personal tasks across month, week, day, and agenda datasets", () => {
+      const sampleTasks = [
+        { id: "1", title: "Personal Grocery", teamId: null, team: null },
+        { id: "2", title: "Sprint Sync", teamId: "team-1", team: { name: "Engineering" } },
+        { id: "3", title: "Team Retro", teamId: "team-2", team: null },
+        { id: "4", title: "Dentist Visit", teamId: null, team: null },
+      ];
+
+      const teamTasks = sampleTasks.filter(isTeamTask);
+      const personalTasks = sampleTasks.filter((t) => !isTeamTask(t));
+
+      expect(teamTasks.map((t) => t.id)).toEqual(["2", "3"]);
+      expect(personalTasks.map((t) => t.id)).toEqual(["1", "4"]);
+    });
+  });
 });

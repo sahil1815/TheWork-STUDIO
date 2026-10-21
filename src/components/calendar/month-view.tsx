@@ -151,8 +151,8 @@ export function MonthView({
                         {task.title}
                       </span>
 
-                      {task.team && (
-                        <span title={`Team: ${task.team.name}`}>
+                      {(task.team || task.teamId) && (
+                        <span title={task.team?.name ? `Team: ${task.team.name}` : "Team Task"}>
                           <Users className="h-3 w-3 text-zinc-400 shrink-0" />
                         </span>
                       )}
