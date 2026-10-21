@@ -144,10 +144,11 @@ model VerificationToken {
 }
 
 model Team {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id               String   @id @default(cuid())
+  name             String
+  penaltiesEnabled Boolean  @default(true) @map("penalties_enabled")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   members     TeamMember[]
   invitations TeamInvitation[]

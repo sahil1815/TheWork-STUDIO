@@ -21,9 +21,12 @@ import { syncTaskReminderJobs } from "@/lib/reminders";
 import {
   syncSingleTaskPenalty,
   evaluateAndSyncUserPenalties,
+  evaluateAndSyncTeamPenalties,
   getOrCreatePenaltySettings,
   getMonthlyPenaltySummary,
+  getTeamPenaltyData,
 } from "@/lib/penalties";
+import { getUserMembership } from "@/actions/team-actions";
 
 /**
  * Verify user is authenticated and return user id
@@ -628,7 +631,17 @@ export async function getPenaltySettingsAction() {
   try {
     const userId = await getAuthUserId();
     const settings = await getOrCreatePenaltySettings(userId);
-    return { success: true, settings };
+    const adminMembership = await db.teamMember.findFirst({
+      where: {
+        userId,
+        role: { in: [Role.OWNER, Role.ADMIN] },
+      },
+    });
+    return {
+      success: true,
+      settings,
+      canEditTeamPenalties: !!adminMembership,
+    };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to load penalty settings";
     return { success: false, error: message };
@@ -637,6 +650,7 @@ export async function getPenaltySettingsAction() {
 
 /**
  * Update independent penalty toggles for personal or team tasks
+ * (Team task penalties can only be edited by Master Admin or Admin)
  */
 export async function updatePenaltySettingsAction(rawInput: {
   personalTasksEnabled?: boolean;
@@ -645,6 +659,22 @@ export async function updatePenaltySettingsAction(rawInput: {
   try {
     const userId = await getAuthUserId();
     const validated = penaltySettingSchema.parse(rawInput);
+
+    if (validated.teamTasksEnabled !== undefined) {
+      const adminRole = await db.teamMember.findFirst({
+        where: {
+          userId,
+          role: { in: [Role.OWNER, Role.ADMIN] },
+        },
+      });
+
+      if (!adminRole) {
+        return {
+          success: false,
+          error: "A team task penalty should only be editable by the master admin and the admin.",
+        };
+      }
+    }
 
     const settings = await db.penaltySetting.upsert({
       where: { userId },
@@ -710,5 +740,98 @@ export async function getUserTeams() {
     }));
   } catch {
     return [];
+  }
+}
+
+/**
+ * Get team penalty summary: total count and individual team member counts
+ */
+export async function getTeamPenaltySummaryAction(teamId: string, monthYear?: string) {
+  try {
+    const userId = await getAuthUserId();
+    const membership = await getUserMembership(teamId, userId);
+    if (!membership || !can(membership.role, "VIEW_TEAM")) {
+      return { success: false, error: "Unauthorized: not a member of this team" };
+    }
+
+    await evaluateAndSyncTeamPenalties(teamId);
+    const data = await getTeamPenaltyData(teamId, monthYear, userId);
+    return { success: true, data };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to load team penalties";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Toggle team penalty system on/off for a team
+ * (Only Master Admin and Admin can perform this action)
+ */
+export async function toggleTeamPenaltiesAction(teamId: string, enabled: boolean) {
+  try {
+    const userId = await getAuthUserId();
+    const membership = await getUserMembership(teamId, userId);
+    if (!membership || !can(membership.role, "MANAGE_TEAM_PENALTIES")) {
+      return {
+        success: false,
+        error: "A team task penalty should only be editable by the master admin and the admin.",
+      };
+    }
+
+    await db.team.update({
+      where: { id: teamId },
+      data: { penaltiesEnabled: enabled },
+    });
+
+    if (enabled) {
+      await evaluateAndSyncTeamPenalties(teamId);
+    }
+
+    revalidatePath(`/teams/${teamId}`);
+    revalidatePath("/tasks");
+    revalidatePath("/calendar");
+
+    return { success: true, penaltiesEnabled: enabled };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update team penalties";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Waive / delete an existing team task penalty record
+ * (Only Master Admin and Admin can perform this action)
+ */
+export async function waiveTeamTaskPenaltyAction(teamId: string, penaltyId: string) {
+  try {
+    const userId = await getAuthUserId();
+    const membership = await getUserMembership(teamId, userId);
+    if (!membership || !can(membership.role, "MANAGE_TEAM_PENALTIES")) {
+      return {
+        success: false,
+        error: "A team task penalty should only be editable by the master admin and the admin.",
+      };
+    }
+
+    const penalty = await db.taskPenalty.findUnique({
+      where: { id: penaltyId },
+    });
+
+    if (!penalty || penalty.teamId !== teamId) {
+      return { success: false, error: "Penalty not found in this team." };
+    }
+
+    await db.taskPenalty.delete({
+      where: { id: penaltyId },
+    });
+
+    revalidatePath(`/teams/${teamId}`);
+    revalidatePath("/tasks");
+    revalidatePath("/calendar");
+
+    return { success: true };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to waive penalty";
+    return { success: false, error: message };
   }
 }

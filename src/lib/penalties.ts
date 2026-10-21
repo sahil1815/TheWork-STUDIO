@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { toDateString } from "@/lib/date-utils";
 import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
-import { TaskStatus, TaskType } from "@prisma/client";
+import { TaskStatus, TaskType, Role } from "@prisma/client";
 
 export interface TaskTimingData {
   date: Date | string;
@@ -102,6 +102,7 @@ export async function syncSingleTaskPenalty(
     include: {
       assignee: { select: { id: true, timeZone: true } },
       createdBy: { select: { id: true, timeZone: true } },
+      team: { select: { id: true, penaltiesEnabled: true } },
       penalty: true,
     },
   });
@@ -123,11 +124,11 @@ export async function syncSingleTaskPenalty(
   const isEnabled =
     taskType === TaskType.PERSONAL
       ? settings.personalTasksEnabled
-      : settings.teamTasksEnabled;
+      : settings.teamTasksEnabled && (task.team ? task.team.penaltiesEnabled : true);
 
   if (isOverdue) {
     if (!isEnabled) {
-      // Penalty system disabled for this task type; do not create
+      // Penalty system disabled for this task type or team; do not create
       return;
     }
 
@@ -246,11 +247,17 @@ export async function evaluateAndSyncUserPenalties(
         include: {
           assignee: { select: { id: true, timeZone: true } },
           createdBy: { select: { id: true, timeZone: true } },
+          team: { select: { id: true, penaltiesEnabled: true } },
           penalty: true,
         },
       });
 
       for (const task of teamTasks) {
+        // If team has penalties disabled, skip
+        if (task.team && task.team.penaltiesEnabled === false) {
+          continue;
+        }
+
         const responsibleUser = task.assignee || task.createdBy;
         if (!responsibleUser) continue;
 
@@ -430,5 +437,202 @@ export async function getMonthlyPenaltySummary(
       team: p.team,
     })),
     availableMonths,
+  };
+}
+
+/**
+ * Evaluates overdue tasks belonging to a specific team and generates penalties
+ * if penalties are enabled for that team.
+ */
+export async function evaluateAndSyncTeamPenalties(
+  teamId: string,
+  now: Date = new Date()
+): Promise<void> {
+  const team = await db.team.findUnique({
+    where: { id: teamId },
+    select: { id: true, penaltiesEnabled: true },
+  });
+
+  if (!team || !team.penaltiesEnabled) return;
+
+  const teamTasks = await db.task.findMany({
+    where: {
+      teamId,
+      status: { notIn: [TaskStatus.DONE, TaskStatus.CANCELLED] },
+    },
+    include: {
+      assignee: { select: { id: true, timeZone: true } },
+      createdBy: { select: { id: true, timeZone: true } },
+      penalty: true,
+    },
+  });
+
+  for (const task of teamTasks) {
+    const responsibleUser = task.assignee || task.createdBy;
+    if (!responsibleUser) continue;
+
+    const tz = responsibleUser.timeZone || "UTC";
+    const deadline = getTaskDeadline(task, tz);
+
+    if (now.getTime() > deadline.getTime()) {
+      const { monthYear, year, month } = getPenaltyMonthDetails(deadline, tz);
+      await db.taskPenalty.upsert({
+        where: { taskId: task.id },
+        create: {
+          taskId: task.id,
+          taskType: TaskType.TEAM,
+          userId: responsibleUser.id,
+          teamId,
+          deadline,
+          penaltyDate: now,
+          monthYear,
+          year,
+          month,
+        },
+        update: {
+          taskType: TaskType.TEAM,
+          userId: responsibleUser.id,
+          teamId,
+          deadline,
+          monthYear,
+          year,
+          month,
+        },
+      });
+    } else if (task.penalty) {
+      await db.taskPenalty.delete({ where: { taskId: task.id } }).catch(() => {});
+    }
+  }
+}
+
+/**
+ * Gets team-specific penalty data:
+ * - Total penalty count (sum of all team members)
+ * - Individual team member penalty counts
+ * - Historical records and available months
+ * - Permissions (canEdit true only for Master Admin and Admin)
+ */
+export async function getTeamPenaltyData(
+  teamId: string,
+  monthYear?: string,
+  callerUserId?: string
+) {
+  const team = await db.team.findUnique({
+    where: { id: teamId },
+    include: {
+      members: {
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, image: true, timeZone: true },
+          },
+        },
+        orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+      },
+    },
+  });
+
+  if (!team) return null;
+
+  const callerMember = callerUserId
+    ? team.members.find((m) => m.userId === callerUserId)
+    : undefined;
+
+  const timeZone = callerMember?.user.timeZone || "UTC";
+  const currentMonthYear = formatInTimeZone(new Date(), timeZone, "yyyy-MM");
+  const selectedMonthYear = monthYear || currentMonthYear;
+
+  // Retrieve penalties for this team in the selected month
+  const penalties = await db.taskPenalty.findMany({
+    where: {
+      teamId,
+      taskType: TaskType.TEAM,
+      monthYear: selectedMonthYear,
+    },
+    include: {
+      task: {
+        select: {
+          id: true,
+          title: true,
+          date: true,
+          startTime: true,
+          endTime: true,
+          status: true,
+          priority: true,
+        },
+      },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+        },
+      },
+    },
+    orderBy: { deadline: "desc" },
+  });
+
+  // Calculate penalties for current month
+  const currentMonthTotal = await db.taskPenalty.count({
+    where: {
+      teamId,
+      taskType: TaskType.TEAM,
+      monthYear: currentMonthYear,
+    },
+  });
+
+  // Calculate member penalty counts for selected month
+  const memberCounts = team.members.map((m) => {
+    const memberPenalties = penalties.filter((p) => p.userId === m.userId);
+    return {
+      userId: m.userId,
+      name: m.user.name || "Anonymous Member",
+      email: m.user.email,
+      image: m.user.image,
+      role: m.role,
+      penaltyCount: memberPenalties.length,
+    };
+  });
+
+  // Available history months
+  const distinctMonths = await db.taskPenalty.findMany({
+    where: { teamId, taskType: TaskType.TEAM },
+    select: { monthYear: true },
+    distinct: ["monthYear"],
+    orderBy: { monthYear: "desc" },
+  });
+
+  const availableMonthsSet = new Set(distinctMonths.map((m) => m.monthYear));
+  availableMonthsSet.add(currentMonthYear);
+  const availableMonths = Array.from(availableMonthsSet).sort().reverse();
+
+  const isMasterAdmin = callerMember?.role === Role.OWNER;
+  const isAdmin = callerMember?.role === Role.ADMIN || isMasterAdmin;
+
+  return {
+    teamId: team.id,
+    teamName: team.name,
+    penaltiesEnabled: team.penaltiesEnabled,
+    currentMonthYear,
+    selectedMonthYear,
+    totalPenalties: penalties.length, // Included sum across all members
+    currentMonthTotal,
+    members: memberCounts, // Individual person counts
+    penalties: penalties.map((p) => ({
+      id: p.id,
+      taskId: p.taskId,
+      taskTitle: p.task.title,
+      taskDate: toDateString(p.task.date),
+      taskTiming: p.task.startTime || "All day",
+      taskStatus: p.task.status,
+      taskPriority: p.task.priority,
+      deadline: p.deadline.toISOString(),
+      penaltyDate: p.penaltyDate.toISOString(),
+      monthYear: p.monthYear,
+      responsibleUser: p.user,
+    })),
+    availableMonths,
+    canEdit: isAdmin,
+    currentUserRole: callerMember?.role,
   };
 }

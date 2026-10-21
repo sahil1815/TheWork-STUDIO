@@ -12,7 +12,8 @@ export type PermissionAction =
   | "ASSIGN_ROLE"
   | "REMOVE_MEMBER"
   | "MANAGE_TEAM"
-  | "LEAVE_TEAM";
+  | "LEAVE_TEAM"
+  | "MANAGE_TEAM_PENALTIES";
 
 interface PermissionContext {
   isTaskOwner?: boolean;
@@ -79,6 +80,10 @@ export function can(
     case "LEAVE_TEAM":
       // ADMIN, MEMBER, GUEST can leave freely; OWNER must transfer ownership first
       return role === Role.ADMIN || role === Role.MEMBER || role === Role.GUEST;
+
+    case "MANAGE_TEAM_PENALTIES":
+      // Strictly Master Admin (OWNER) and Admin (ADMIN) only
+      return role === Role.OWNER || role === Role.ADMIN;
 
     default:
       return false;

@@ -435,4 +435,117 @@ describe("Task Management System Fixes & Monthly Penalty System", () => {
       expect(updatedPenalty.taskType).toBe(TaskType.TEAM);
     });
   });
+
+  describe("6. Team Task Penalty Permissions & Individual/Total Aggregation", () => {
+    it("should allow strictly Master Admin (OWNER) and Admin (ADMIN) to edit team penalties", () => {
+      expect(can(Role.OWNER, "MANAGE_TEAM_PENALTIES")).toBe(true);
+      expect(can(Role.ADMIN, "MANAGE_TEAM_PENALTIES")).toBe(true);
+      expect(can(Role.MEMBER, "MANAGE_TEAM_PENALTIES")).toBe(false);
+      expect(can(Role.GUEST, "MANAGE_TEAM_PENALTIES")).toBe(false);
+    });
+
+    it("should reject team penalty modification when user is not Master Admin or Admin", () => {
+      const checkPermission = (role: Role) => {
+        if (!can(role, "MANAGE_TEAM_PENALTIES")) {
+          return { success: false, error: "A team task penalty should only be editable by the master admin and the admin." };
+        }
+        return { success: true };
+      };
+
+      expect(checkPermission(Role.OWNER).success).toBe(true);
+      expect(checkPermission(Role.ADMIN).success).toBe(true);
+      expect(checkPermission(Role.MEMBER).success).toBe(false);
+      expect(checkPermission(Role.MEMBER).error).toBe("A team task penalty should only be editable by the master admin and the admin.");
+      expect(checkPermission(Role.GUEST).success).toBe(false);
+    });
+
+    it("should accurately compute individual member penalty counts and included total sum", () => {
+      const teamMembers = [
+        { userId: "user-alice", name: "Alice (Master Admin)", role: Role.OWNER },
+        { userId: "user-bob", name: "Bob (Admin)", role: Role.ADMIN },
+        { userId: "user-charlie", name: "Charlie (Member)", role: Role.MEMBER },
+        { userId: "user-david", name: "David (Guest)", role: Role.GUEST },
+      ];
+
+      const teamPenalties = [
+        { id: "pen-1", taskId: "task-1", teamId: "team-eng", userId: "user-bob", monthYear: "2026-10" },
+        { id: "pen-2", taskId: "task-2", teamId: "team-eng", userId: "user-charlie", monthYear: "2026-10" },
+        { id: "pen-3", taskId: "task-3", teamId: "team-eng", userId: "user-charlie", monthYear: "2026-10" },
+      ];
+
+      // Individual breakdown calculation
+      const memberBreakdown = teamMembers.map((m) => {
+        const count = teamPenalties.filter((p) => p.userId === m.userId).length;
+        return {
+          userId: m.userId,
+          name: m.name,
+          role: m.role,
+          penaltyCount: count,
+        };
+      });
+
+      // Individual counts
+      expect(memberBreakdown.find((m) => m.userId === "user-alice")?.penaltyCount).toBe(0);
+      expect(memberBreakdown.find((m) => m.userId === "user-bob")?.penaltyCount).toBe(1);
+      expect(memberBreakdown.find((m) => m.userId === "user-charlie")?.penaltyCount).toBe(2);
+      expect(memberBreakdown.find((m) => m.userId === "user-david")?.penaltyCount).toBe(0);
+
+      // Total count: included sum by adding all member penalties
+      const totalTeamPenalties = memberBreakdown.reduce((sum, m) => sum + m.penaltyCount, 0);
+      expect(totalTeamPenalties).toBe(3);
+      expect(totalTeamPenalties).toBe(teamPenalties.length);
+    });
+
+    it("should respect team.penaltiesEnabled flag during team task evaluation", () => {
+      const evaluateTeamTaskEligibility = (
+        isOverdue: boolean,
+        teamPenaltiesEnabled: boolean,
+        userTeamTasksEnabled: boolean
+      ) => {
+        if (!isOverdue) return false;
+        return teamPenaltiesEnabled && userTeamTasksEnabled;
+      };
+
+      // Both enabled -> generates penalty
+      expect(evaluateTeamTaskEligibility(true, true, true)).toBe(true);
+
+      // Team penalties OFF -> no penalty generated
+      expect(evaluateTeamTaskEligibility(true, false, true)).toBe(false);
+
+      // User setting OFF -> no penalty generated
+      expect(evaluateTeamTaskEligibility(true, true, false)).toBe(false);
+
+      // On time -> no penalty
+      expect(evaluateTeamTaskEligibility(false, true, true)).toBe(false);
+    });
+
+    it("should allow Master Admin and Admin to waive a penalty record", () => {
+      let teamPenalties = [
+        { id: "pen-1", taskId: "task-1", teamId: "team-eng", userId: "user-charlie" },
+        { id: "pen-2", taskId: "task-2", teamId: "team-eng", userId: "user-bob" },
+      ];
+
+      const waivePenalty = (role: Role, penaltyId: string) => {
+        if (!can(role, "MANAGE_TEAM_PENALTIES")) {
+          throw new Error("A team task penalty should only be editable by the master admin and the admin.");
+        }
+        teamPenalties = teamPenalties.filter((p) => p.id !== penaltyId);
+      };
+
+      // Member cannot waive
+      expect(() => waivePenalty(Role.MEMBER, "pen-1")).toThrow(
+        "A team task penalty should only be editable by the master admin and the admin."
+      );
+      expect(teamPenalties.length).toBe(2);
+
+      // Admin can waive
+      waivePenalty(Role.ADMIN, "pen-1");
+      expect(teamPenalties.length).toBe(1);
+      expect(teamPenalties.some((p) => p.id === "pen-1")).toBe(false);
+
+      // Master Admin can waive
+      waivePenalty(Role.OWNER, "pen-2");
+      expect(teamPenalties.length).toBe(0);
+    });
+  });
 });

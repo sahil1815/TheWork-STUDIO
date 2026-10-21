@@ -36,6 +36,7 @@ import {
   Send,
 } from "lucide-react";
 import { ProposeTaskModal } from "@/components/tasks/propose-task-modal";
+import { TeamPenaltyWidget } from "./team-penalty-widget";
 
 interface TeamDashboardProps {
   team: any;
@@ -48,7 +49,7 @@ export function TeamDashboard({ team, currentUserId }: TeamDashboardProps) {
   const isOwner = currentUserRole === Role.OWNER;
   const isAdmin = currentUserRole === Role.ADMIN || isOwner;
 
-  const [activeTab, setActiveTab] = useState<"members" | "invitations" | "settings">("members");
+  const [activeTab, setActiveTab] = useState<"members" | "penalties" | "invitations" | "settings">("members");
 
   // Invite Modal State
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
@@ -239,6 +240,14 @@ export function TeamDashboard({ team, currentUserId }: TeamDashboardProps) {
             <span>Team Tasks</span>
           </Link>
 
+          <button
+            onClick={() => setActiveTab("penalties")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-200 dark:border-purple-800 text-xs font-semibold text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition"
+          >
+            <AlertTriangle className="h-3.5 w-3.5" />
+            <span>Team Penalties</span>
+          </button>
+
           {currentUserRole !== Role.GUEST && (
             <button
               onClick={() => {
@@ -275,6 +284,18 @@ export function TeamDashboard({ team, currentUserId }: TeamDashboardProps) {
           }`}
         >
           Members ({team.members.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab("penalties")}
+          className={`pb-3 transition border-b-2 -mb-px flex items-center gap-1.5 ${
+            activeTab === "penalties"
+              ? "border-purple-600 text-purple-600 dark:text-purple-400"
+              : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+          }`}
+        >
+          <AlertTriangle className="h-4 w-4" />
+          <span>Penalties</span>
         </button>
 
         {isAdmin && (
@@ -407,6 +428,16 @@ export function TeamDashboard({ team, currentUserId }: TeamDashboardProps) {
             })}
           </div>
         </div>
+      )}
+
+      {/* TAB 2: PENALTIES */}
+      {activeTab === "penalties" && (
+        <TeamPenaltyWidget
+          teamId={team.id}
+          teamName={team.name}
+          currentUserRole={currentUserRole}
+          currentUserId={currentUserId}
+        />
       )}
 
       {/* TAB 2: INVITATIONS (TWO-STEP APPROVAL) */}

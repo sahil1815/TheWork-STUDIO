@@ -32,7 +32,7 @@ async function getAuthUserId(): Promise<string> {
 /**
  * Get user membership and role within a team
  */
-async function getUserMembership(teamId: string, userId: string) {
+export async function getUserMembership(teamId: string, userId: string) {
   return db.teamMember.findUnique({
     where: { teamId_userId: { teamId, userId } },
     include: { team: true, user: true },

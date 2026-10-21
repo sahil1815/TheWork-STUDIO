@@ -38,6 +38,7 @@ export function PenaltyDashboardWidget({
 }: PenaltyDashboardWidgetProps) {
   const [personalEnabled, setPersonalEnabled] = useState(true);
   const [teamEnabled, setTeamEnabled] = useState(true);
+  const [canEditTeam, setCanEditTeam] = useState(true);
   const [togglingPersonal, setTogglingPersonal] = useState(false);
   const [togglingTeam, setTogglingTeam] = useState(false);
 
@@ -60,6 +61,9 @@ export function PenaltyDashboardWidget({
       if (settingsRes.success && settingsRes.settings) {
         setPersonalEnabled(settingsRes.settings.personalTasksEnabled);
         setTeamEnabled(settingsRes.settings.teamTasksEnabled);
+      }
+      if (settingsRes.success && settingsRes.canEditTeamPenalties !== undefined) {
+        setCanEditTeam(settingsRes.canEditTeamPenalties);
       }
 
       if (summaryRes.success && summaryRes.summary) {
@@ -243,12 +247,21 @@ export function PenaltyDashboardWidget({
               </div>
 
               {/* Independent Toggle Switch */}
-              <label className="relative inline-flex items-center cursor-pointer">
+              <label
+                className={`relative inline-flex items-center ${
+                  !canEditTeam ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                }`}
+                title={
+                  !canEditTeam
+                    ? "Editable only by Master Admin and Admin"
+                    : "Toggle team task penalties"
+                }
+              >
                 <input
                   type="checkbox"
                   checked={teamEnabled}
                   onChange={handleToggleTeam}
-                  disabled={togglingTeam}
+                  disabled={!canEditTeam || togglingTeam}
                   className="sr-only peer"
                 />
                 <div className="w-8 h-4 bg-zinc-300 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-purple-600"></div>
@@ -265,7 +278,9 @@ export function PenaltyDashboardWidget({
               </span>
             </div>
             <p className="text-[10px] text-zinc-400 mt-1">
-              {teamEnabled
+              {!canEditTeam
+                ? "Editable only by Master Admin and Admin."
+                : teamEnabled
                 ? "Active: Associated with the responsible member assigned."
                 : "Disabled: Team tasks will not incur penalties."}
             </p>
