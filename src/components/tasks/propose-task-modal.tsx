@@ -130,6 +130,22 @@ export function ProposeTaskModal({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Sync initialTeams if it updates or loads later
+  useEffect(() => {
+    if (initialTeams && initialTeams.length > 0) {
+      setAllTeams((prev) => {
+        const map = new Map<string, TeamOption>();
+        for (const t of prev) map.set(t.id, t);
+        for (const t of initialTeams.filter((t) => t.role !== Role.GUEST)) {
+          if (!map.has(t.id) || (t.members && t.members.length > 0)) {
+            map.set(t.id, t);
+          }
+        }
+        return Array.from(map.values());
+      });
+    }
+  }, [initialTeams]);
+
   // Fetch full proposable teams list if user has access to more teams
   useEffect(() => {
     let mounted = true;
@@ -184,9 +200,7 @@ export function ProposeTaskModal({
     setProposals([firstDraft]);
     setError(null);
     setSuccess(null);
-  }, [isOpen, initialTeamId, initialRecipientId, initialData, currentUserId, allTeams.length]);
-
-  if (!isOpen) return null;
+  }, [isOpen, initialTeamId, initialRecipientId, initialData, currentUserId]);
 
   // Helper to get eligible recipients for a specific team
   const getEligibleRecipientsForTeam = (teamId: string) => {
@@ -198,14 +212,38 @@ export function ProposeTaskModal({
     );
   };
 
+  // Ensure every proposal draft has a valid recipientId once eligible recipients are loaded or teams change
+  useEffect(() => {
+    if (!isOpen) return;
+    setProposals((prev) => {
+      let changed = false;
+      const updated = prev.map((p) => {
+        const recipients = getEligibleRecipientsForTeam(p.teamId);
+        if (recipients.length === 0) return p;
+
+        const isCurrentRecipientValid = p.recipientId && recipients.some((r) => r.userId === p.recipientId);
+        if (!isCurrentRecipientValid) {
+          changed = true;
+          return {
+            ...p,
+            recipientId: recipients[0].userId,
+          };
+        }
+        return p;
+      });
+      return changed ? updated : prev;
+    });
+  }, [allTeams, isOpen]);
+
   // Add another proposal to the batch
   const handleAddProposal = () => {
     const last = proposals[proposals.length - 1];
     const defaultTeamId = last ? last.teamId : allTeams[0]?.id || "";
     const recipients = getEligibleRecipientsForTeam(defaultTeamId);
-    const defaultRecipientId = last
-      ? last.recipientId
-      : recipients[0]?.userId || "";
+    const defaultRecipientId =
+      recipients.length > 0
+        ? (recipients.some((r) => r.userId === last?.recipientId) ? last.recipientId : recipients[0].userId)
+        : "";
 
     const newDraft = createEmptyProposalDraft(
       defaultTeamId,
@@ -293,7 +331,13 @@ export function ProposeTaskModal({
         return;
       }
 
-      if (!p.recipientId) {
+      const eligible = getEligibleRecipientsForTeam(p.teamId);
+      const effectiveRecipientId =
+        p.recipientId && eligible.some((m) => m.userId === p.recipientId)
+          ? p.recipientId
+          : eligible[0]?.userId || "";
+
+      if (!effectiveRecipientId) {
         setError(`Proposal #${num}: Please select an eligible teammate to receive the proposal.`);
         handleUpdateProposalField(p.id, "isExpanded", true);
         return;
@@ -327,19 +371,27 @@ export function ProposeTaskModal({
 
     setLoading(true);
 
-    const payloads = proposals.map((p) => ({
-      teamId: p.teamId,
-      recipientId: p.recipientId,
-      title: p.title.trim(),
-      date: p.date,
-      startTime: p.startTime || undefined,
-      endTime: p.endTime || undefined,
-      priority: p.priority,
-      description: p.description.trim() || undefined,
-      location: p.location.trim() || undefined,
-      color: p.color,
-      message: p.message.trim() || undefined,
-    }));
+    const payloads = proposals.map((p) => {
+      const eligible = getEligibleRecipientsForTeam(p.teamId);
+      const recipientId =
+        p.recipientId && eligible.some((m) => m.userId === p.recipientId)
+          ? p.recipientId
+          : eligible[0]?.userId || "";
+
+      return {
+        teamId: p.teamId,
+        recipientId,
+        title: p.title.trim(),
+        date: p.date,
+        startTime: p.startTime || undefined,
+        endTime: p.endTime || undefined,
+        priority: p.priority,
+        description: p.description.trim() || undefined,
+        location: p.location.trim() || undefined,
+        color: p.color,
+        message: p.message.trim() || undefined,
+      };
+    });
 
     const res = await createBatchTaskProposals(payloads);
 
@@ -358,6 +410,8 @@ export function ProposeTaskModal({
       setLoading(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
@@ -441,7 +495,7 @@ export function ProposeTaskModal({
                   const team = allTeams.find((t) => t.id === proposal.teamId);
                   const eligibleRecipients = getEligibleRecipientsForTeam(proposal.teamId);
                   const recipientMember = eligibleRecipients.find(
-                    (m) => m.userId === proposal.recipientId
+                    (m) => m.userId === (proposal.recipientId || eligibleRecipients[0]?.userId)
                   );
                   const recipientName = recipientMember?.user?.name || recipientMember?.user?.email || "Teammate";
 
@@ -552,7 +606,10 @@ export function ProposeTaskModal({
                                 </p>
                               ) : (
                                 <select
-                                  value={proposal.recipientId}
+                                  value={
+                                    proposal.recipientId ||
+                                    (eligibleRecipients.length > 0 ? eligibleRecipients[0].userId : "")
+                                  }
                                   onChange={(e) =>
                                     handleUpdateProposalField(
                                       proposal.id,

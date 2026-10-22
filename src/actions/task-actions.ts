@@ -732,13 +732,31 @@ export async function getUserTeams() {
     const memberships = await db.teamMember.findMany({
       where: { userId },
       include: {
-        team: { select: { id: true, name: true } },
+        team: {
+          select: {
+            id: true,
+            name: true,
+            members: {
+              include: {
+                user: {
+                  select: { id: true, name: true, email: true },
+                },
+              },
+            },
+          },
+        },
       },
     });
     return memberships.map((m) => ({
       id: m.team.id,
       name: m.team.name,
       role: m.role,
+      members: m.team.members.map((tm) => ({
+        id: tm.id,
+        userId: tm.userId,
+        role: tm.role,
+        user: tm.user,
+      })),
     }));
   } catch {
     return [];

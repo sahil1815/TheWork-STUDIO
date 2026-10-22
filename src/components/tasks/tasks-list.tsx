@@ -35,6 +35,7 @@ interface TeamOption {
   id: string;
   name: string;
   role: string;
+  members?: any[];
 }
 
 interface TasksListProps {

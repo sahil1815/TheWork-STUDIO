@@ -155,6 +155,62 @@ describe("Phase 4: Task Proposals & Inbox Engine (FR-17, FR-18, FR-19, FR-28)", 
       const result = batchProposalsSchema.safeParse(invalidBatch);
       expect(result.success).toBe(false);
     });
+    it("should permit a team member proposing a task to the team owner", () => {
+      // Proposer is MEMBER, recipient is OWNER
+      const proposerRole = Role.MEMBER;
+      const recipientRole = Role.OWNER;
+
+      expect(can(proposerRole, "PROPOSE_TASK")).toBe(true);
+      expect(recipientRole).not.toBe(Role.GUEST);
+
+      const validProposal = createProposalSchema.safeParse({
+        teamId: "team-core",
+        recipientId: "user-owner-sahil",
+        title: "Inventory management with website",
+        date: "2026-10-24",
+        priority: TaskPriority.HIGH,
+      });
+
+      expect(validProposal.success).toBe(true);
+      if (validProposal.success) {
+        expect(validProposal.data.recipientId).toBe("user-owner-sahil");
+        expect(validProposal.data.title).toBe("Inventory management with website");
+        expect(validProposal.data.priority).toBe(TaskPriority.HIGH);
+      }
+    });
+
+    it("should resolve recipientId from eligible team members when empty", () => {
+      const currentUserId = "member-user-id";
+      const teamMembers = [
+        { userId: "member-user-id", role: Role.MEMBER, user: { name: "Team Member" } },
+        { userId: "sahil-owner-id", role: Role.OWNER, user: { name: "Sahil" } },
+        { userId: "guest-id", role: Role.GUEST, user: { name: "Guest User" } },
+      ];
+
+      // Eligible recipients are non-self and non-guest
+      const eligible = teamMembers.filter(
+        (m) => m.userId !== currentUserId && m.role !== Role.GUEST
+      );
+
+      expect(eligible.length).toBe(1);
+      expect(eligible[0].userId).toBe("sahil-owner-id");
+      expect(eligible[0].role).toBe(Role.OWNER);
+
+      // Simulating effectiveRecipientId resolution logic in ProposeTaskModal
+      const proposalDraft = {
+        teamId: "team-core",
+        recipientId: "",
+        title: "Inventory management with website",
+        date: "2026-10-24",
+      };
+
+      const effectiveRecipientId =
+        proposalDraft.recipientId && eligible.some((m) => m.userId === proposalDraft.recipientId)
+          ? proposalDraft.recipientId
+          : eligible[0]?.userId || "";
+
+      expect(effectiveRecipientId).toBe("sahil-owner-id");
+    });
   });
 
   describe("Proposal Response Validation", () => {

@@ -104,6 +104,8 @@ export async function createTaskProposal(rawInput: CreateProposalInput) {
     });
 
     revalidatePath("/inbox");
+    revalidatePath("/tasks");
+    revalidatePath("/calendar");
     return { success: true, proposal };
   } catch (error: unknown) {
     console.error("Create proposal error:", error);
@@ -215,6 +217,8 @@ export async function createBatchTaskProposals(rawInputs: CreateProposalInput[])
     });
 
     revalidatePath("/inbox");
+    revalidatePath("/tasks");
+    revalidatePath("/calendar");
     return { success: true, count: createdProposals.length, proposals: createdProposals };
   } catch (error: unknown) {
     console.error("Create batch proposals error:", error);
