@@ -210,8 +210,17 @@ export async function updateTask(taskId: string, rawInput: TaskInput) {
     const userId = await getAuthUserId();
     const validated = taskSchema.parse(rawInput);
 
+    // Sync any pending penalty for this task before evaluating
+    await syncSingleTaskPenalty(taskId);
+
     const existingTask = await db.task.findUnique({
       where: { id: taskId },
+      include: {
+        team: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true, email: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
+        penalty: true,
+      },
     });
 
     if (!existingTask) {
@@ -224,6 +233,56 @@ export async function updateTask(taskId: string, rawInput: TaskInput) {
     }
 
     const taskDate = parseDateString(validated.date);
+    const originalDateStr = toDateString(existingTask.date);
+    const isDateChanged = originalDateStr !== validated.date;
+    const hasPenalty = !!existingTask.penalty;
+
+    if (hasPenalty && isDateChanged) {
+      // The task already got a penalty and user changed the date:
+      // The undone task still shows on the original date with its penalty intact.
+      // A new copy of the same task appears on the new date.
+      const newTask = await db.task.create({
+        data: {
+          title: validated.title.trim(),
+          date: taskDate,
+          startTime: validated.startTime && validated.startTime.trim() !== "" ? validated.startTime : null,
+          endTime: validated.endTime && validated.endTime.trim() !== "" ? validated.endTime : null,
+          description: validated.description?.trim() || null,
+          status: TaskStatus.TODO,
+          priority: validated.priority,
+          location: validated.location?.trim() || null,
+          color: validated.color || existingTask.color,
+          teamId: existingTask.teamId,
+          assigneeId: validated.assigneeId !== undefined ? (validated.assigneeId || null) : existingTask.assigneeId,
+          createdById: existingTask.createdById,
+          recurrenceRule: existingTask.recurrenceRule,
+        },
+        include: {
+          team: { select: { id: true, name: true } },
+          assignee: { select: { id: true, name: true, email: true } },
+          createdBy: { select: { id: true, name: true, email: true } },
+          penalty: true,
+        },
+      });
+
+      await syncTaskReminderJobs(newTask.id);
+      await syncSingleTaskPenalty(newTask.id);
+
+      revalidatePath("/calendar");
+      revalidatePath("/tasks");
+      if (existingTask.teamId) {
+        revalidatePath(`/teams/${existingTask.teamId}`);
+      }
+
+      return {
+        success: true,
+        task: {
+          ...newTask,
+          dateString: toDateString(newTask.date),
+        },
+        copied: true,
+      };
+    }
 
     const updatedTask = await db.task.update({
       where: { id: taskId },
@@ -261,7 +320,17 @@ export async function updateTask(taskId: string, rawInput: TaskInput) {
 
     revalidatePath("/calendar");
     revalidatePath("/tasks");
-    return { success: true, task: updatedTask };
+    if (updatedTask.teamId) {
+      revalidatePath(`/teams/${updatedTask.teamId}`);
+    }
+
+    return {
+      success: true,
+      task: {
+        ...updatedTask,
+        dateString: toDateString(updatedTask.date),
+      },
+    };
   } catch (error: unknown) {
     console.error("Update task error:", error);
     const message = error instanceof Error ? error.message : "Failed to update task";
@@ -355,8 +424,17 @@ export async function rescheduleTask(rawInput: RescheduleTaskInput) {
     const userId = await getAuthUserId();
     const validated = rescheduleTaskSchema.parse(rawInput);
 
+    // Sync any pending penalty for this task before evaluating
+    await syncSingleTaskPenalty(validated.taskId);
+
     const existingTask = await db.task.findUnique({
       where: { id: validated.taskId },
+      include: {
+        team: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true, email: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
+        penalty: true,
+      },
     });
 
     if (!existingTask) {
@@ -369,6 +447,56 @@ export async function rescheduleTask(rawInput: RescheduleTaskInput) {
     }
 
     const newDate = parseDateString(validated.date);
+    const originalDateStr = toDateString(existingTask.date);
+    const isDateChanged = originalDateStr !== validated.date;
+    const hasPenalty = !!existingTask.penalty;
+
+    if (hasPenalty && isDateChanged) {
+      // The task already got a penalty and user changed the date:
+      // The undone task still shows on the original date with its penalty intact.
+      // A new copy of the same task appears on the new date.
+      const newTask = await db.task.create({
+        data: {
+          title: existingTask.title,
+          date: newDate,
+          startTime: validated.startTime !== undefined ? validated.startTime : existingTask.startTime,
+          endTime: validated.endTime !== undefined ? validated.endTime : existingTask.endTime,
+          description: existingTask.description,
+          status: TaskStatus.TODO,
+          priority: existingTask.priority,
+          location: existingTask.location,
+          color: existingTask.color,
+          teamId: existingTask.teamId,
+          assigneeId: existingTask.assigneeId,
+          createdById: existingTask.createdById,
+          recurrenceRule: existingTask.recurrenceRule,
+        },
+        include: {
+          team: { select: { id: true, name: true } },
+          assignee: { select: { id: true, name: true, email: true } },
+          createdBy: { select: { id: true, name: true, email: true } },
+          penalty: true,
+        },
+      });
+
+      await syncTaskReminderJobs(newTask.id);
+      await syncSingleTaskPenalty(newTask.id);
+
+      revalidatePath("/calendar");
+      revalidatePath("/tasks");
+      if (existingTask.teamId) {
+        revalidatePath(`/teams/${existingTask.teamId}`);
+      }
+
+      return {
+        success: true,
+        task: {
+          ...newTask,
+          dateString: toDateString(newTask.date),
+        },
+        copied: true,
+      };
+    }
 
     const task = await db.task.update({
       where: { id: validated.taskId },
@@ -390,7 +518,17 @@ export async function rescheduleTask(rawInput: RescheduleTaskInput) {
 
     revalidatePath("/calendar");
     revalidatePath("/tasks");
-    return { success: true, task };
+    if (task.teamId) {
+      revalidatePath(`/teams/${task.teamId}`);
+    }
+
+    return {
+      success: true,
+      task: {
+        ...task,
+        dateString: toDateString(task.date),
+      },
+    };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to reschedule task";
     return { success: false, error: message };

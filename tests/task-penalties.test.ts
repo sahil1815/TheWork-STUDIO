@@ -548,4 +548,256 @@ describe("Task Management System Fixes & Monthly Penalty System", () => {
       expect(teamPenalties.length).toBe(0);
     });
   });
+
+  describe("7. Task Date Change & Rescheduling Penalty Preservation", () => {
+    interface SimulatedTask {
+      id: string;
+      title: string;
+      date: string;
+      startTime?: string | null;
+      endTime?: string | null;
+      description?: string | null;
+      status: TaskStatus;
+      priority: TaskPriority;
+      location?: string | null;
+      color?: string | null;
+      teamId?: string | null;
+      createdById: string;
+      assigneeId?: string | null;
+    }
+
+    interface SimulatedPenalty {
+      id: string;
+      taskId: string;
+      taskType: TaskType;
+      userId: string;
+      teamId?: string | null;
+      monthYear: string;
+    }
+
+    const processTaskDateChange = (
+      task: SimulatedTask,
+      newDate: string,
+      penalties: SimulatedPenalty[],
+      allTasks: SimulatedTask[],
+      timingUpdates?: { startTime?: string | null; endTime?: string | null; title?: string }
+    ) => {
+      const hasPenalty = penalties.some((p) => p.taskId === task.id);
+      const isDateChanged = task.date !== newDate;
+
+      if (hasPenalty && isDateChanged) {
+        // Task has penalty and date changed:
+        // Original undone task remains on original date with its penalty intact.
+        // A new copy is created on the new date.
+        const copiedTask: SimulatedTask = {
+          ...task,
+          id: `task-copy-${Date.now()}-${Math.random()}`,
+          title: timingUpdates?.title ?? task.title,
+          date: newDate,
+          startTime: timingUpdates?.startTime !== undefined ? timingUpdates.startTime : task.startTime,
+          endTime: timingUpdates?.endTime !== undefined ? timingUpdates.endTime : task.endTime,
+          status: TaskStatus.TODO,
+        };
+
+        allTasks.push(copiedTask);
+        // Original task is NOT modified or moved, penalty is NOT deleted
+        return { copied: true, originalTask: task, newTask: copiedTask };
+      } else {
+        // Normal update: task date moves directly, no copy made
+        task.date = newDate;
+        if (timingUpdates?.title) task.title = timingUpdates.title;
+        if (timingUpdates?.startTime !== undefined) task.startTime = timingUpdates.startTime;
+        if (timingUpdates?.endTime !== undefined) task.endTime = timingUpdates.endTime;
+        return { copied: false, originalTask: task, newTask: task };
+      }
+    };
+
+    it("should allow changing task date normally before penalty is incurred (no copy, no penalty)", () => {
+      const tasks: SimulatedTask[] = [
+        {
+          id: "task-future-1",
+          title: "Prepare Slide Deck",
+          date: "2026-10-28",
+          status: TaskStatus.TODO,
+          priority: TaskPriority.MEDIUM,
+          teamId: null,
+          createdById: "user-alice",
+          assigneeId: "user-alice",
+        },
+      ];
+      const penalties: SimulatedPenalty[] = [];
+
+      const result = processTaskDateChange(tasks[0], "2026-10-29", penalties, tasks);
+
+      expect(result.copied).toBe(false);
+      expect(tasks.length).toBe(1);
+      expect(tasks[0].date).toBe("2026-10-29");
+      expect(penalties.length).toBe(0);
+    });
+
+    it("should preserve penalty and copy personal task to new date when changed after getting penalty", () => {
+      const originalTask: SimulatedTask = {
+        id: "task-overdue-personal",
+        title: "Submit Expense Report",
+        date: "2026-10-18",
+        status: TaskStatus.TODO,
+        priority: TaskPriority.HIGH,
+        teamId: null,
+        createdById: "user-alice",
+        assigneeId: "user-alice",
+      };
+
+      const tasks: SimulatedTask[] = [originalTask];
+      const penalties: SimulatedPenalty[] = [
+        {
+          id: "pen-expense-1",
+          taskId: originalTask.id,
+          taskType: TaskType.PERSONAL,
+          userId: "user-alice",
+          teamId: null,
+          monthYear: "2026-10",
+        },
+      ];
+
+      // Alice changes date after getting penalty
+      const result = processTaskDateChange(originalTask, "2026-10-26", penalties, tasks);
+
+      // 1. Task was copied
+      expect(result.copied).toBe(true);
+      expect(tasks.length).toBe(2);
+
+      // 2. Original undone task still shows on original date
+      expect(result.originalTask.id).toBe("task-overdue-personal");
+      expect(result.originalTask.date).toBe("2026-10-18");
+      expect(result.originalTask.status).toBe(TaskStatus.TODO);
+
+      // 3. New copy appears on new date with status TODO
+      expect(result.newTask.date).toBe("2026-10-26");
+      expect(result.newTask.title).toBe("Submit Expense Report");
+      expect(result.newTask.status).toBe(TaskStatus.TODO);
+      expect(result.newTask.teamId).toBeNull();
+      expect(result.newTask.assigneeId).toBe("user-alice");
+
+      // 4. Penalty count is still there and preserved
+      expect(penalties.length).toBe(1);
+      expect(penalties[0].taskId).toBe("task-overdue-personal");
+      expect(penalties[0].userId).toBe("user-alice");
+    });
+
+    it("should preserve penalty and copy team task to new date when changed after getting penalty", () => {
+      const originalTeamTask: SimulatedTask = {
+        id: "team-task-overdue-1",
+        title: "Deploy Production Hotfix",
+        date: "2026-10-19",
+        status: TaskStatus.TODO,
+        priority: TaskPriority.HIGH,
+        teamId: "team-eng",
+        createdById: "user-alice",
+        assigneeId: "user-bob",
+      };
+
+      const tasks: SimulatedTask[] = [originalTeamTask];
+      const penalties: SimulatedPenalty[] = [
+        {
+          id: "pen-team-hotfix-1",
+          taskId: originalTeamTask.id,
+          taskType: TaskType.TEAM,
+          userId: "user-bob",
+          teamId: "team-eng",
+          monthYear: "2026-10",
+        },
+      ];
+
+      // Bob changes the date to a future date
+      const result = processTaskDateChange(originalTeamTask, "2026-10-27", penalties, tasks);
+
+      expect(result.copied).toBe(true);
+      expect(tasks.length).toBe(2);
+
+      // Original undone task remains on original date with team penalty
+      expect(result.originalTask.id).toBe("team-task-overdue-1");
+      expect(result.originalTask.date).toBe("2026-10-19");
+      expect(result.originalTask.status).toBe(TaskStatus.TODO);
+      expect(result.originalTask.teamId).toBe("team-eng");
+
+      // New copy has the new date, same team and assignee, status TODO
+      expect(result.newTask.date).toBe("2026-10-27");
+      expect(result.newTask.teamId).toBe("team-eng");
+      expect(result.newTask.assigneeId).toBe("user-bob");
+      expect(result.newTask.status).toBe(TaskStatus.TODO);
+
+      // Team penalty is NOT removed
+      expect(penalties.length).toBe(1);
+      expect(penalties.find((p) => p.taskId === "team-task-overdue-1")).toBeDefined();
+    });
+
+    it("should not copy when editing non-date fields on a penalized task on the same date", () => {
+      const penalizedTask: SimulatedTask = {
+        id: "task-penalized-same-date",
+        title: "Old Title",
+        date: "2026-10-15",
+        status: TaskStatus.TODO,
+        priority: TaskPriority.MEDIUM,
+        teamId: null,
+        createdById: "user-alice",
+        assigneeId: "user-alice",
+      };
+
+      const tasks: SimulatedTask[] = [penalizedTask];
+      const penalties: SimulatedPenalty[] = [
+        {
+          id: "pen-1",
+          taskId: penalizedTask.id,
+          taskType: TaskType.PERSONAL,
+          userId: "user-alice",
+          monthYear: "2026-10",
+        },
+      ];
+
+      // User edits title without changing date
+      const result = processTaskDateChange(penalizedTask, "2026-10-15", penalties, tasks, {
+        title: "Updated Title on Same Date",
+      });
+
+      expect(result.copied).toBe(false);
+      expect(tasks.length).toBe(1);
+      expect(tasks[0].title).toBe("Updated Title on Same Date");
+      expect(tasks[0].date).toBe("2026-10-15");
+      expect(penalties.length).toBe(1);
+    });
+
+    it("should never delete existing penalties during synchronization even if task is later completed or rescheduled", () => {
+      const recordedPenalties = new Map<string, SimulatedPenalty>();
+      recordedPenalties.set("task-100", {
+        id: "pen-100",
+        taskId: "task-100",
+        taskType: TaskType.PERSONAL,
+        userId: "user-1",
+        monthYear: "2026-10",
+      });
+
+      // Synchronizer logic without automatic deletion
+      const syncPenalty = (taskId: string, isOverdue: boolean) => {
+        if (isOverdue) {
+          if (!recordedPenalties.has(taskId)) {
+            recordedPenalties.set(taskId, {
+              id: `pen-${taskId}`,
+              taskId,
+              taskType: TaskType.PERSONAL,
+              userId: "user-1",
+              monthYear: "2026-10",
+            });
+          }
+        }
+        // If not overdue, recorded penalty remains intact
+      };
+
+      // Simulated task-100 is evaluated when now <= deadline or DONE (isOverdue = false)
+      syncPenalty("task-100", false);
+
+      // The penalty must STILL be there
+      expect(recordedPenalties.has("task-100")).toBe(true);
+      expect(recordedPenalties.size).toBe(1);
+    });
+  });
 });

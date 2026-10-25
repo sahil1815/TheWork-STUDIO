@@ -157,14 +157,6 @@ export async function syncSingleTaskPenalty(
         month,
       },
     });
-  } else {
-    // If not overdue:
-    // If task deadline was rescheduled to the future, remove any active penalty
-    if (now.getTime() <= deadline.getTime() && task.penalty) {
-      await db.taskPenalty.delete({
-        where: { taskId: task.id },
-      }).catch(() => {});
-    }
   }
 }
 
@@ -223,9 +215,6 @@ export async function evaluateAndSyncUserPenalties(
             month,
           },
         });
-      } else if (task.penalty) {
-        // Rescheduled to future
-        await db.taskPenalty.delete({ where: { taskId: task.id } }).catch(() => {});
       }
     }
   }
@@ -289,8 +278,6 @@ export async function evaluateAndSyncUserPenalties(
               month,
             },
           });
-        } else if (task.penalty) {
-          await db.taskPenalty.delete({ where: { taskId: task.id } }).catch(() => {});
         }
       }
     }
@@ -499,8 +486,6 @@ export async function evaluateAndSyncTeamPenalties(
           month,
         },
       });
-    } else if (task.penalty) {
-      await db.taskPenalty.delete({ where: { taskId: task.id } }).catch(() => {});
     }
   }
 }

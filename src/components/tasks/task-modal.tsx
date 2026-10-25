@@ -280,7 +280,8 @@ export function TaskModal({
         }
 
         if (editTeamId && !taskToEdit.teamId) {
-          const convResult = await convertPersonalTaskToTeamTask(taskToEdit.id, {
+          const targetTaskId = result.task?.id || taskToEdit.id;
+          const convResult = await convertPersonalTaskToTeamTask(targetTaskId, {
             teamId: editTeamId,
             assigneeId: editAssigneeId || undefined,
           });

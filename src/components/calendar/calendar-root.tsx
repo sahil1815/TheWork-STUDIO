@@ -201,6 +201,8 @@ export function CalendarRoot({
     if (!res.success) {
       alert(`Could not reschedule task: ${res.error}`);
       await refreshTasks();
+    } else if ((res as any)?.copied) {
+      await refreshTasks();
     }
   };
 
