@@ -19,11 +19,13 @@ import {
   CheckCircle2,
   Loader2,
   ArrowUpRight,
+  Trash2,
 } from "lucide-react";
 import {
   getPenaltySettingsAction,
   updatePenaltySettingsAction,
   getPenaltySummaryAction,
+  removePenaltyAction,
 } from "@/actions/task-actions";
 import { format, parseISO } from "date-fns";
 
@@ -49,6 +51,28 @@ export function PenaltyDashboardWidget({
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [historyTypeFilter, setHistoryTypeFilter] = useState<"ALL" | "PERSONAL" | "TEAM">("ALL");
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const handleRemovePenalty = async (penaltyId: string, taskTitle: string) => {
+    if (!window.confirm(`Are you sure you want to remove the penalty for "${taskTitle}"?`)) {
+      return;
+    }
+
+    setRemovingId(penaltyId);
+    try {
+      const res = await removePenaltyAction(penaltyId);
+      if (!res.success) {
+        alert(res.error || "Failed to remove penalty");
+      } else {
+        await loadData(selectedMonth);
+        onSettingsChanged?.();
+      }
+    } catch {
+      alert("Failed to remove penalty. Please try again.");
+    } finally {
+      setRemovingId(null);
+    }
+  };
 
   const loadData = async (month?: string) => {
     try {
@@ -406,6 +430,17 @@ export function PenaltyDashboardWidget({
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300">
                           +1 Penalty
                         </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePenalty(p.id, p.taskTitle)}
+                          disabled={removingId === p.id}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50/50 dark:bg-red-950/20 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition disabled:opacity-50"
+                          title="Remove this penalty"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>{removingId === p.id ? "Removing..." : "Remove"}</span>
+                        </button>
                       </div>
                     </div>
                   );

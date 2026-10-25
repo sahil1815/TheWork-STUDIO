@@ -210,6 +210,7 @@ model Task {
   location         String?
   color            String?
   recurrenceRule   String?      @map("recurrence_rule")
+  penaltyWaived    Boolean      @default(false) @map("penalty_waived")
   teamId           String?      @map("team_id")
   createdById      String       @map("created_by_id")
   assigneeId       String?      @map("assignee_id")

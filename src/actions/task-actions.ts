@@ -957,6 +957,77 @@ export async function toggleTeamPenaltiesAction(teamId: string, enabled: boolean
 }
 
 /**
+ * Remove an existing penalty record (for personal or team tasks)
+ * - For personal tasks: the task owner/assignee can remove their penalty
+ * - For team tasks: Master Admin and Admin can remove the penalty
+ */
+export async function removePenaltyAction(penaltyIdOrTaskId: string) {
+  try {
+    const userId = await getAuthUserId();
+
+    const penalty = await db.taskPenalty.findFirst({
+      where: {
+        OR: [
+          { id: penaltyIdOrTaskId },
+          { taskId: penaltyIdOrTaskId },
+        ],
+      },
+      include: {
+        task: true,
+      },
+    });
+
+    if (!penalty) {
+      return { success: false, error: "Penalty record not found." };
+    }
+
+    if (penalty.taskType === TaskType.PERSONAL) {
+      if (penalty.userId !== userId && penalty.task?.createdById !== userId) {
+        return { success: false, error: "You do not have permission to remove this penalty." };
+      }
+    } else {
+      if (penalty.teamId) {
+        const membership = await getUserMembership(penalty.teamId, userId);
+        if (!membership || !can(membership.role, "MANAGE_TEAM_PENALTIES")) {
+          return {
+            success: false,
+            error: "A team task penalty should only be editable by the master admin and the admin.",
+          };
+        }
+      }
+    }
+
+    if (penalty.taskId) {
+      await db.task.update({
+        where: { id: penalty.taskId },
+        data: {
+          penaltyWaived: true,
+          ...(penalty.task?.status === TaskStatus.TODO && {
+            status: TaskStatus.DONE,
+          }),
+        },
+      });
+    }
+
+    await db.taskPenalty.delete({
+      where: { id: penalty.id },
+    });
+
+    revalidatePath("/tasks");
+    revalidatePath("/calendar");
+    if (penalty.teamId) {
+      revalidatePath(`/teams/${penalty.teamId}`);
+    }
+
+    return { success: true };
+  } catch (error: unknown) {
+    console.error("Remove penalty error:", error);
+    const message = error instanceof Error ? error.message : "Failed to remove penalty";
+    return { success: false, error: message };
+  }
+}
+
+/**
  * Waive / delete an existing team task penalty record
  * (Only Master Admin and Admin can perform this action)
  */
@@ -973,10 +1044,23 @@ export async function waiveTeamTaskPenaltyAction(teamId: string, penaltyId: stri
 
     const penalty = await db.taskPenalty.findUnique({
       where: { id: penaltyId },
+      include: { task: true },
     });
 
     if (!penalty || penalty.teamId !== teamId) {
       return { success: false, error: "Penalty not found in this team." };
+    }
+
+    if (penalty.taskId) {
+      await db.task.update({
+        where: { id: penalty.taskId },
+        data: {
+          penaltyWaived: true,
+          ...(penalty.task?.status === TaskStatus.TODO && {
+            status: TaskStatus.DONE,
+          }),
+        },
+      });
     }
 
     await db.taskPenalty.delete({

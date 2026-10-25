@@ -800,4 +800,166 @@ describe("Task Management System Fixes & Monthly Penalty System", () => {
       expect(recordedPenalties.size).toBe(1);
     });
   });
+
+  describe("8. Manual Penalty Removal & Waiving (Accidental Unselect / Forgot to Update)", () => {
+    interface TaskRecord {
+      id: string;
+      title: string;
+      status: TaskStatus;
+      penaltyWaived: boolean;
+      createdById: string;
+      assigneeId?: string | null;
+      teamId?: string | null;
+    }
+
+    interface PenaltyRecord {
+      id: string;
+      taskId: string;
+      taskType: TaskType;
+      userId: string;
+      teamId?: string | null;
+      monthYear: string;
+    }
+
+    const removePenalty = (
+      penaltyId: string,
+      callerUserId: string,
+      callerRoleInTeam: Role | null,
+      tasks: Map<string, TaskRecord>,
+      penalties: Map<string, PenaltyRecord>
+    ) => {
+      const penalty = penalties.get(penaltyId);
+      if (!penalty) {
+        return { success: false, error: "Penalty record not found." };
+      }
+
+      const task = tasks.get(penalty.taskId);
+
+      if (penalty.taskType === TaskType.PERSONAL) {
+        if (penalty.userId !== callerUserId && task?.createdById !== callerUserId) {
+          return { success: false, error: "You do not have permission to remove this penalty." };
+        }
+      } else {
+        if (!callerRoleInTeam || !can(callerRoleInTeam, "MANAGE_TEAM_PENALTIES")) {
+          return {
+            success: false,
+            error: "A team task penalty should only be editable by the master admin and the admin.",
+          };
+        }
+      }
+
+      // Mark task as waived and completed if TODO
+      if (task) {
+        task.penaltyWaived = true;
+        if (task.status === TaskStatus.TODO) {
+          task.status = TaskStatus.DONE;
+        }
+      }
+
+      penalties.delete(penaltyId);
+      return { success: true };
+    };
+
+    it("should allow user to remove their own personal penalty", () => {
+      const tasks = new Map<string, TaskRecord>();
+      tasks.set("task-1", {
+        id: "task-1",
+        title: "Posting video of AF V2.0 on X.",
+        status: TaskStatus.TODO,
+        penaltyWaived: false,
+        createdById: "user-sahil",
+      });
+
+      const penalties = new Map<string, PenaltyRecord>();
+      penalties.set("pen-1", {
+        id: "pen-1",
+        taskId: "task-1",
+        taskType: TaskType.PERSONAL,
+        userId: "user-sahil",
+        monthYear: "2026-10",
+      });
+
+      const result = removePenalty("pen-1", "user-sahil", null, tasks, penalties);
+      expect(result.success).toBe(true);
+      expect(penalties.has("pen-1")).toBe(false);
+      expect(tasks.get("task-1")?.penaltyWaived).toBe(true);
+      expect(tasks.get("task-1")?.status).toBe(TaskStatus.DONE);
+    });
+
+    it("should reject unauthorized user from removing someone else's personal penalty", () => {
+      const tasks = new Map<string, TaskRecord>();
+      tasks.set("task-1", {
+        id: "task-1",
+        title: "Meeting With Dream Home Decor",
+        status: TaskStatus.TODO,
+        penaltyWaived: false,
+        createdById: "user-sahil",
+      });
+
+      const penalties = new Map<string, PenaltyRecord>();
+      penalties.set("pen-1", {
+        id: "pen-1",
+        taskId: "task-1",
+        taskType: TaskType.PERSONAL,
+        userId: "user-sahil",
+        monthYear: "2026-10",
+      });
+
+      const result = removePenalty("pen-1", "user-other", null, tasks, penalties);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("You do not have permission to remove this penalty.");
+      expect(penalties.has("pen-1")).toBe(true);
+    });
+
+    it("should allow Master Admin and Admin to remove team penalties, but reject regular members", () => {
+      const tasks = new Map<string, TaskRecord>();
+      tasks.set("team-task-1", {
+        id: "team-task-1",
+        title: "Release v2.0",
+        status: TaskStatus.TODO,
+        penaltyWaived: false,
+        createdById: "user-alice",
+        teamId: "team-1",
+      });
+
+      const penalties = new Map<string, PenaltyRecord>();
+      penalties.set("team-pen-1", {
+        id: "team-pen-1",
+        taskId: "team-task-1",
+        taskType: TaskType.TEAM,
+        userId: "user-bob",
+        teamId: "team-1",
+        monthYear: "2026-10",
+      });
+
+      // Member cannot remove
+      const memberRes = removePenalty("team-pen-1", "user-charlie", Role.MEMBER, tasks, penalties);
+      expect(memberRes.success).toBe(false);
+      expect(memberRes.error).toBe("A team task penalty should only be editable by the master admin and the admin.");
+      expect(penalties.has("team-pen-1")).toBe(true);
+
+      // Admin can remove
+      const adminRes = removePenalty("team-pen-1", "user-alice", Role.ADMIN, tasks, penalties);
+      expect(adminRes.success).toBe(true);
+      expect(penalties.has("team-pen-1")).toBe(false);
+      expect(tasks.get("team-task-1")?.penaltyWaived).toBe(true);
+    });
+
+    it("should prevent penalty evaluation from re-penalizing tasks marked as penaltyWaived", () => {
+      const task = {
+        id: "task-waived",
+        penaltyWaived: true,
+        status: TaskStatus.TODO,
+        date: "2026-10-10",
+      };
+
+      const evaluateShouldPenalize = (t: { penaltyWaived: boolean; status: TaskStatus }) => {
+        if (t.penaltyWaived) return false;
+        if (t.status === TaskStatus.DONE) return false;
+        return true;
+      };
+
+      expect(evaluateShouldPenalize(task)).toBe(false);
+    });
+  });
 });

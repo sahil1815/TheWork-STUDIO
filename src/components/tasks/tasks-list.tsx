@@ -12,6 +12,7 @@ import {
   toggleTaskComplete,
   getCalendarTasks,
   deleteTask,
+  removePenaltyAction,
 } from "@/actions/task-actions";
 import {
   Check,
@@ -81,6 +82,27 @@ export function TasksList({
 
   // Key to force refresh Penalty widget
   const [penaltyWidgetKey, setPenaltyWidgetKey] = useState(0);
+  const [removingPenaltyId, setRemovingPenaltyId] = useState<string | null>(null);
+
+  const handleRemovePenalty = async (penaltyId: string, taskTitle: string) => {
+    if (!window.confirm(`Are you sure you want to remove the penalty for "${taskTitle}"?`)) {
+      return;
+    }
+
+    setRemovingPenaltyId(penaltyId);
+    try {
+      const res = await removePenaltyAction(penaltyId);
+      if (!res.success) {
+        alert(res.error || "Failed to remove penalty");
+      } else {
+        await refreshTasks();
+      }
+    } catch {
+      alert("Failed to remove penalty. Please try again.");
+    } finally {
+      setRemovingPenaltyId(null);
+    }
+  };
 
   const refreshTasks = async () => {
     let filterParam = "all";
@@ -424,12 +446,25 @@ export function TasksList({
                         </span>
                       )}
 
-                      {/* Penalty Badge */}
+                      {/* Penalty Badge & Quick Remove */}
                       {hasPenalty && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 flex items-center gap-1">
-                          <AlertTriangle className="h-3 w-3" />
-                          <span>Penalty Recorded</span>
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            <span>Penalty Recorded</span>
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePenalty(task.penalty.id, task.title)}
+                            disabled={removingPenaltyId === task.penalty.id}
+                            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border border-red-200 dark:border-red-900/50 transition disabled:opacity-50"
+                            title="Remove this penalty"
+                          >
+                            <Trash2 className="h-2.5 w-2.5" />
+                            <span>{removingPenaltyId === task.penalty.id ? "Removing..." : "Remove"}</span>
+                          </button>
+                        </div>
                       )}
                     </div>
 

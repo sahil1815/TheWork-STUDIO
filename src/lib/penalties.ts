@@ -107,7 +107,7 @@ export async function syncSingleTaskPenalty(
     },
   });
 
-  if (!task) return;
+  if (!task || task.penaltyWaived) return;
 
   const responsibleUser = task.assignee || task.createdBy;
   if (!responsibleUser) return;
@@ -184,6 +184,7 @@ export async function evaluateAndSyncUserPenalties(
         teamId: null,
         OR: [{ assigneeId: userId }, { createdById: userId }],
         status: { notIn: [TaskStatus.DONE, TaskStatus.CANCELLED] },
+        penaltyWaived: false,
       },
       include: { penalty: true },
     });
@@ -232,6 +233,7 @@ export async function evaluateAndSyncUserPenalties(
         where: {
           teamId: { in: userTeamIds },
           status: { notIn: [TaskStatus.DONE, TaskStatus.CANCELLED] },
+          penaltyWaived: false,
         },
         include: {
           assignee: { select: { id: true, timeZone: true } },
@@ -446,6 +448,7 @@ export async function evaluateAndSyncTeamPenalties(
     where: {
       teamId,
       status: { notIn: [TaskStatus.DONE, TaskStatus.CANCELLED] },
+      penaltyWaived: false,
     },
     include: {
       assignee: { select: { id: true, timeZone: true } },
