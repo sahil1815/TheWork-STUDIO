@@ -537,7 +537,7 @@ export async function rescheduleTask(rawInput: RescheduleTaskInput) {
 
 /**
  * Fetch calendar tasks (FR-07, FR-08)
- * Filter: 'all' | 'personal' | 'team' | teamId
+ * Filter: 'all' | 'personal' | 'team' | 'team-assigned-to-me' | 'team-assigned-to-others' | teamId
  */
 export async function getCalendarTasks(filter: string = "all") {
   try {
@@ -565,6 +565,40 @@ export async function getCalendarTasks(filter: string = "all") {
       // Team tasks: only tasks with teamId in user's teams, strictly team tasks
       whereCondition = {
         teamId: { in: userTeamIds, not: null },
+      };
+    } else if (filter === "team-assigned-to-me" || filter === "team-me") {
+      // Team tasks assigned to current user
+      whereCondition = {
+        teamId: { in: userTeamIds, not: null },
+        assigneeId: userId,
+      };
+    } else if (filter === "team-assigned-to-others" || filter === "team-others") {
+      // Team tasks assigned to others (not current user)
+      whereCondition = {
+        teamId: { in: userTeamIds, not: null },
+        OR: [{ assigneeId: { not: userId } }, { assigneeId: null }],
+      };
+    } else if (filter.endsWith(":me") || filter.endsWith("-me")) {
+      const targetTeamId = filter.replace(/:me$|-me$/, "");
+      const membership = await db.teamMember.findUnique({
+        where: { teamId_userId: { teamId: targetTeamId, userId } },
+      });
+      if (!membership) return [];
+
+      whereCondition = {
+        teamId: targetTeamId,
+        assigneeId: userId,
+      };
+    } else if (filter.endsWith(":others") || filter.endsWith("-others")) {
+      const targetTeamId = filter.replace(/:others$|-others$/, "");
+      const membership = await db.teamMember.findUnique({
+        where: { teamId_userId: { teamId: targetTeamId, userId } },
+      });
+      if (!membership) return [];
+
+      whereCondition = {
+        teamId: targetTeamId,
+        OR: [{ assigneeId: { not: userId } }, { assigneeId: null }],
       };
     } else if (filter !== "all") {
       // Specific team filter: ensure user is member of this team

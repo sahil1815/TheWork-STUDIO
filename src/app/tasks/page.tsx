@@ -11,7 +11,7 @@ export const metadata = {
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ section?: string; teamId?: string }>;
+  searchParams?: Promise<{ section?: string; teamId?: string; assigned?: string }>;
 }) {
   const session = await auth();
 
@@ -27,14 +27,21 @@ export default async function TasksPage({
       ? "TEAM"
       : "ALL";
 
+  const initialAssignment =
+    resolvedParams?.assigned === "me"
+      ? "ME"
+      : resolvedParams?.assigned === "others"
+      ? "OTHERS"
+      : "ALL";
+
   const fetchFilter =
     resolvedParams?.section === "personal"
       ? "personal"
       : resolvedParams?.teamId
       ? resolvedParams.teamId
       : resolvedParams?.section === "team"
-      ? "team"
-      : "all";
+      ? (initialAssignment === "ME" ? "team-assigned-to-me" : initialAssignment === "OTHERS" ? "team-assigned-to-others" : "team")
+      : (initialAssignment === "ME" ? "team-assigned-to-me" : initialAssignment === "OTHERS" ? "team-assigned-to-others" : "all");
 
   const [initialTasks, teams] = await Promise.all([
     getCalendarTasks(fetchFilter),
@@ -48,6 +55,7 @@ export default async function TasksPage({
       currentUserId={session.user.id!}
       initialSection={initialSection}
       initialTeamId={resolvedParams?.teamId}
+      initialAssignment={initialAssignment}
     />
   );
 }

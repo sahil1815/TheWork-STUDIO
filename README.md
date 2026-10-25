@@ -10,7 +10,7 @@
 
 - **Personal & Team Calendar (FR-01 to FR-09)**:
   - Interactive **Month**, **Week**, **Day**, and **Agenda** views with HTML5 drag-and-drop rescheduling.
-  - Granular calendar filtering (`All Calendars`, `Personal Tasks Only`, or specific `Team Calendars`).
+  - Granular calendar filtering (`All Calendars`, `Personal Tasks Only`, `All Team Tasks`, `Team Tasks (Assigned to Me)`, `Team Tasks (Assigned to Others)`, or specific `Team Calendars`).
   - Strict timing validation (FR-05): all-day, timed start-only, and time ranges (`endTime > startTime`), with automatic rejection of `endTime` without `startTime`.
   - Color-coded priority badges (`LOW`, `MEDIUM`, `HIGH`) and locations.
 - **Multi-Role Team Management (FR-10 to FR-16)**:

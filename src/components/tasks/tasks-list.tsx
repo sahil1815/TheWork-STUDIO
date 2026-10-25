@@ -45,6 +45,7 @@ interface TasksListProps {
   currentUserId?: string;
   initialSection?: "ALL" | "PERSONAL" | "TEAM";
   initialTeamId?: string;
+  initialAssignment?: "ALL" | "ME" | "OTHERS";
 }
 
 export function TasksList({
@@ -53,6 +54,7 @@ export function TasksList({
   currentUserId,
   initialSection = "ALL",
   initialTeamId,
+  initialAssignment = "ALL",
 }: TasksListProps) {
   const [tasks, setTasks] = useState<any[]>(initialTasks);
   const [search, setSearch] = useState("");
@@ -60,6 +62,7 @@ export function TasksList({
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [priorityFilter, setPriorityFilter] = useState<string>("ALL");
   const [teamFilter, setTeamFilter] = useState<string>(initialTeamId || "ALL");
+  const [assignmentFilter, setAssignmentFilter] = useState<"ALL" | "ME" | "OTHERS">(initialAssignment);
 
   // Edit / Create Task Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -109,9 +112,37 @@ export function TasksList({
     if (section === "PERSONAL") {
       filterParam = "personal";
     } else if (section === "TEAM") {
-      filterParam = teamFilter !== "ALL" ? teamFilter : "team";
+      if (teamFilter !== "ALL") {
+        filterParam =
+          assignmentFilter === "ME"
+            ? `${teamFilter}:me`
+            : assignmentFilter === "OTHERS"
+            ? `${teamFilter}:others`
+            : teamFilter;
+      } else {
+        filterParam =
+          assignmentFilter === "ME"
+            ? "team-assigned-to-me"
+            : assignmentFilter === "OTHERS"
+            ? "team-assigned-to-others"
+            : "team";
+      }
     } else {
-      filterParam = teamFilter !== "ALL" ? teamFilter : "all";
+      if (teamFilter !== "ALL") {
+        filterParam =
+          assignmentFilter === "ME"
+            ? `${teamFilter}:me`
+            : assignmentFilter === "OTHERS"
+            ? `${teamFilter}:others`
+            : teamFilter;
+      } else {
+        filterParam =
+          assignmentFilter === "ME"
+            ? "team-assigned-to-me"
+            : assignmentFilter === "OTHERS"
+            ? "team-assigned-to-others"
+            : "all";
+      }
     }
 
     const updated = await getCalendarTasks(filterParam);
@@ -182,7 +213,17 @@ export function TasksList({
     // 4. Priority Filter
     if (priorityFilter !== "ALL" && t.priority !== priorityFilter) return false;
 
-    // 5. Search Query
+    // 5. Assignment Filter (Team tasks or tasks with a team)
+    if (section !== "PERSONAL" && assignmentFilter !== "ALL" && t.teamId !== null) {
+      if (assignmentFilter === "ME" && t.assigneeId !== currentUserId) {
+        return false;
+      }
+      if (assignmentFilter === "OTHERS" && t.assigneeId === currentUserId) {
+        return false;
+      }
+    }
+
+    // 6. Search Query
     if (search) {
       const q = search.toLowerCase();
       const matchTitle = t.title.toLowerCase().includes(q);
@@ -332,6 +373,22 @@ export function TasksList({
                   {t.name}
                 </option>
               ))}
+            </select>
+          </div>
+        )}
+
+        {/* Assignment Filter (Only available when in Team Tasks section or All Tasks) */}
+        {section !== "PERSONAL" && (
+          <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+            <span className="font-medium">Assignment:</span>
+            <select
+              value={assignmentFilter}
+              onChange={(e) => setAssignmentFilter(e.target.value as "ALL" | "ME" | "OTHERS")}
+              className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 px-2 py-1.5 text-xs focus:outline-none"
+            >
+              <option value="ALL">All Assignments</option>
+              <option value="ME">Assigned to Me</option>
+              <option value="OTHERS">Assigned to Others</option>
             </select>
           </div>
         )}

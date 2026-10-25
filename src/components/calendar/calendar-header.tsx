@@ -184,6 +184,8 @@ export function CalendarHeader({
               <option value="all">All Calendars</option>
               <option value="personal">Personal Tasks Only</option>
               <option value="team">All Team Tasks</option>
+              <option value="team-assigned-to-me">Team Tasks (Assigned to Me)</option>
+              <option value="team-assigned-to-others">Team Tasks (Assigned to Others)</option>
               {teams.length > 0 && (
                 <optgroup label="Teams">
                   {teams.map((t) => (

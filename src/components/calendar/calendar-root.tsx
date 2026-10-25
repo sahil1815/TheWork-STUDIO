@@ -39,6 +39,7 @@ interface CalendarRootProps {
   currentUserId?: string;
   defaultView?: CalendarViewMode;
   initialViewMode?: CalendarViewMode;
+  initialFilter?: string;
 }
 
 export function CalendarRoot({
@@ -47,11 +48,12 @@ export function CalendarRoot({
   currentUserId,
   defaultView = "month",
   initialViewMode,
+  initialFilter = "all",
 }: CalendarRootProps) {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [activeDefaultView, setActiveDefaultView] = useState<CalendarViewMode>(defaultView);
   const [viewMode, setViewMode] = useState<CalendarViewMode>(initialViewMode || defaultView);
-  const [filter, setFilter] = useState<string>("all");
+  const [filter, setFilter] = useState<string>(initialFilter);
   const [tasks, setTasks] = useState<any[]>(initialTasks);
 
   // Sync client storage and default view
@@ -113,7 +115,7 @@ export function CalendarRoot({
     description?: string;
   }) => {
     setProposeInitialTeamId(
-      params?.teamId || (filter !== "all" && filter !== "personal" ? filter : undefined)
+      params?.teamId || (teams.some((t) => t.id === filter) ? filter : undefined)
     );
     setProposeInitialData(params || { date: toDateString(currentDate) });
     setProposeModalOpen(true);

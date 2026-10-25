@@ -22,9 +22,12 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
   const resolvedParams = searchParams ? await searchParams : {};
   const queryViewRaw = resolvedParams?.view;
   const queryView = typeof queryViewRaw === "string" ? queryViewRaw.toLowerCase() : undefined;
+  const queryFilterRaw = resolvedParams?.filter;
+  const queryFilter = typeof queryFilterRaw === "string" ? queryFilterRaw : undefined;
+  const initialFilter = queryFilter || "all";
 
   const [initialTasks, teams, userDefaultView] = await Promise.all([
-    getCalendarTasks("all"),
+    getCalendarTasks(initialFilter),
     getUserTeams(),
     getDefaultCalendarView(),
   ]);
@@ -42,6 +45,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
       currentUserId={session.user.id!}
       defaultView={userDefaultView}
       initialViewMode={initialViewMode}
+      initialFilter={initialFilter}
     />
   );
 }

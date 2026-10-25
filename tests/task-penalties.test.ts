@@ -165,6 +165,63 @@ describe("Task Management System Fixes & Monthly Penalty System", () => {
       expect(teamTasks.some((t) => t.id === "1")).toBe(true);
       expect(teamTasks.length).toBe(3);
     });
+
+    it("should correctly filter team tasks assigned to current user (Assigned to Me)", () => {
+      const currentUserId = "alice";
+      const assignedToMeTasks = mixedTaskList.filter(
+        (t) => t.teamId !== null && t.assigneeId === currentUserId
+      );
+
+      expect(assignedToMeTasks.length).toBe(1);
+      expect(assignedToMeTasks[0].title).toBe("Sprint Planning");
+      expect(assignedToMeTasks[0].assigneeId).toBe("alice");
+      expect(assignedToMeTasks[0].teamId).not.toBeNull();
+    });
+
+    it("should correctly filter team tasks assigned to others (not them)", () => {
+      const currentUserId = "alice";
+      const assignedToOthersTasks = mixedTaskList.filter(
+        (t) => t.teamId !== null && t.assigneeId !== currentUserId
+      );
+
+      expect(assignedToOthersTasks.length).toBe(1);
+      expect(assignedToOthersTasks[0].title).toBe("Architecture Sync");
+      expect(assignedToOthersTasks[0].assigneeId).toBe("bob");
+      expect(assignedToOthersTasks[0].teamId).not.toBeNull();
+    });
+
+    it("should strictly exclude personal tasks when filtering team tasks assigned to me or others", () => {
+      const currentUserId = "alice";
+      // Alice has personal tasks ("Personal Routine", "Dentist Visit"), but they have teamId === null
+      const teamMeTasks = mixedTaskList.filter(
+        (t) => t.teamId !== null && t.assigneeId === currentUserId
+      );
+      expect(teamMeTasks.some((t) => t.teamId === null)).toBe(false);
+
+      // Bob has a personal task ("Personal Grocery"), but it has teamId === null
+      const teamOthersTasks = mixedTaskList.filter(
+        (t) => t.teamId !== null && t.assigneeId !== currentUserId
+      );
+      expect(teamOthersTasks.some((t) => t.teamId === null)).toBe(false);
+    });
+
+    it("should handle unassigned team tasks in 'assigned to others' filter", () => {
+      const currentUserId = "alice";
+      const tasksWithUnassigned = [
+        ...mixedTaskList,
+        { id: "6", title: "Unassigned Team Bug", teamId: "team-1", assigneeId: null },
+      ];
+
+      const assignedToMe = tasksWithUnassigned.filter(
+        (t) => t.teamId !== null && t.assigneeId === currentUserId
+      );
+      const assignedToOthers = tasksWithUnassigned.filter(
+        (t) => t.teamId !== null && t.assigneeId !== currentUserId
+      );
+
+      expect(assignedToMe.some((t) => t.id === "6")).toBe(false);
+      expect(assignedToOthers.some((t) => t.id === "6")).toBe(true);
+    });
   });
 
   describe("3. Deadline Calculation & Overdue Determination", () => {
