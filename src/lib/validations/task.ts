@@ -27,6 +27,7 @@ export const taskSchema = z
     color: z.string().max(50).optional().nullable(),
     teamId: z.string().optional().nullable(),
     assigneeId: z.string().optional().nullable(),
+    assigneeIds: z.array(z.string()).optional().nullable(),
   })
   .superRefine((data, ctx) => {
     const hasStart = !!data.startTime && data.startTime.trim() !== "";
@@ -94,6 +95,7 @@ export const convertPersonalTaskSchema = z.object({
   taskId: z.string().min(1, "Task ID is required"),
   teamId: z.string().min(1, "Team is required"),
   assigneeId: z.string().optional().nullable(),
+  assigneeIds: z.array(z.string()).optional().nullable(),
 });
 
 export type ConvertPersonalTaskInput = z.infer<typeof convertPersonalTaskSchema>;

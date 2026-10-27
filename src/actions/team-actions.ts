@@ -242,6 +242,9 @@ export async function removeMember(teamId: string, targetUserId: string) {
       });
 
       // Unassign target user from team tasks
+      await tx.taskAssignee.deleteMany({
+        where: { userId: targetUserId, task: { teamId } },
+      });
       await tx.task.updateMany({
         where: { teamId, assigneeId: targetUserId },
         data: { assigneeId: null },
@@ -292,6 +295,9 @@ export async function leaveTeam(teamId: string) {
       });
 
       // Unassign user from team tasks
+      await tx.taskAssignee.deleteMany({
+        where: { userId, task: { teamId } },
+      });
       await tx.task.updateMany({
         where: { teamId, assigneeId: userId },
         data: { assigneeId: null },

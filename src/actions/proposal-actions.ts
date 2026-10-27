@@ -351,6 +351,9 @@ export async function respondToProposal(rawInput: RespondProposalInput) {
           teamId: proposal.teamId,
           createdById: proposal.proposerId,
           assigneeId: proposal.recipientId, // Assigned to recipient
+          assignees: {
+            create: [{ userId: proposal.recipientId }],
+          },
           sourceProposalId: proposal.id, // Keeps link back to proposal (FR-18)
           status: TaskStatus.TODO,
         },

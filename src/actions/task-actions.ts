@@ -44,10 +44,27 @@ async function getAuthUserId(): Promise<string> {
 /**
  * Helper to check if a user can edit/delete a given task
  */
-async function canModifyTask(userId: string, task: { id: string; createdById: string; assigneeId: string | null; teamId: string | null }): Promise<boolean> {
+async function canModifyTask(
+  userId: string,
+  task: {
+    id: string;
+    createdById: string;
+    assigneeId: string | null;
+    teamId: string | null;
+    assignees?: { userId: string }[];
+  }
+): Promise<boolean> {
+  const isAssignee =
+    task.assigneeId === userId ||
+    (task.assignees ? task.assignees.some((a) => a.userId === userId) : false);
+
   // If personal task: only creator or assignee can modify
   if (!task.teamId) {
-    return task.createdById === userId || task.assigneeId === userId;
+    if (task.createdById === userId || isAssignee) return true;
+    const directAssigned = await db.taskAssignee.findUnique({
+      where: { taskId_userId: { taskId: task.id, userId } },
+    });
+    return !!directAssigned;
   }
 
   // If team task: check member role in team
@@ -63,8 +80,12 @@ async function canModifyTask(userId: string, task: { id: string; createdById: st
   if (!membership) return false;
   if (membership.role === Role.GUEST) return false;
   if (membership.role === Role.OWNER || membership.role === Role.ADMIN) return true;
-  // MEMBER can edit/delete only own tasks
-  return task.createdById === userId || task.assigneeId === userId;
+  // MEMBER can edit/delete only own tasks (created by them OR assigned to them)
+  if (task.createdById === userId || isAssignee) return true;
+  const directAssigned = await db.taskAssignee.findUnique({
+    where: { taskId_userId: { taskId: task.id, userId } },
+  });
+  return !!directAssigned;
 }
 
 /**
@@ -76,6 +97,14 @@ export async function createPersonalTask(rawInput: TaskInput) {
     const validated = taskSchema.parse(rawInput);
 
     const taskDate = parseDateString(validated.date);
+
+    const targetAssigneeIds =
+      validated.assigneeIds && validated.assigneeIds.length > 0
+        ? Array.from(new Set(validated.assigneeIds.filter(Boolean)))
+        : validated.assigneeId
+        ? [validated.assigneeId]
+        : [userId];
+    const primaryAssigneeId = targetAssigneeIds[0] || userId;
 
     const task = await db.task.create({
       data: {
@@ -89,23 +118,45 @@ export async function createPersonalTask(rawInput: TaskInput) {
         location: validated.location?.trim() || null,
         color: validated.color || "#3b82f6",
         createdById: userId,
-        assigneeId: validated.assigneeId || userId,
+        assigneeId: primaryAssigneeId,
         teamId: validated.teamId || null,
+        assignees: {
+          create: targetAssigneeIds.map((uid) => ({ userId: uid })),
+        },
       },
       include: {
         team: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
-        createdBy: { select: { id: true, name: true, email: true } },
+        assignee: { select: { id: true, name: true, email: true, image: true } },
+        assignees: {
+          include: {
+            user: { select: { id: true, name: true, email: true, image: true } },
+          },
+        },
+        createdBy: { select: { id: true, name: true, email: true, image: true } },
         penalty: true,
       },
     });
+
+    const assigneesList =
+      task.assignees && task.assignees.length > 0
+        ? task.assignees.map((a: any) => a.user)
+        : task.assignee
+        ? [task.assignee]
+        : [];
 
     await syncTaskReminderJobs(task.id);
     await syncSingleTaskPenalty(task.id);
 
     revalidatePath("/calendar");
     revalidatePath("/tasks");
-    return { success: true, task };
+    return {
+      success: true,
+      task: {
+        ...task,
+        dateString: toDateString(task.date),
+        assignees: assigneesList,
+      },
+    };
   } catch (error: unknown) {
     console.error("Create task error:", error);
     const message = error instanceof Error ? error.message : "Failed to create task";
@@ -160,6 +211,14 @@ export async function createBatchTasks(rawInputs: TaskInput[]) {
       const list = [];
       for (const t of validatedTasks) {
         const taskDate = parseDateString(t.date);
+        const targetAssigneeIds =
+          t.assigneeIds && t.assigneeIds.length > 0
+            ? Array.from(new Set(t.assigneeIds.filter(Boolean)))
+            : t.assigneeId
+            ? [t.assigneeId]
+            : [userId];
+        const primaryAssigneeId = targetAssigneeIds[0] || userId;
+
         const created = await tx.task.create({
           data: {
             title: t.title.trim(),
@@ -172,17 +231,37 @@ export async function createBatchTasks(rawInputs: TaskInput[]) {
             location: t.location?.trim() || null,
             color: t.color || "#3b82f6",
             createdById: userId,
-            assigneeId: t.assigneeId || userId,
+            assigneeId: primaryAssigneeId,
             teamId: t.teamId || null,
+            assignees: {
+              create: targetAssigneeIds.map((uid) => ({ userId: uid })),
+            },
           },
           include: {
             team: { select: { id: true, name: true } },
-            assignee: { select: { id: true, name: true, email: true } },
-            createdBy: { select: { id: true, name: true, email: true } },
+            assignee: { select: { id: true, name: true, email: true, image: true } },
+            assignees: {
+              include: {
+                user: { select: { id: true, name: true, email: true, image: true } },
+              },
+            },
+            createdBy: { select: { id: true, name: true, email: true, image: true } },
             penalty: true,
           },
         });
-        list.push(created);
+
+        const assigneesList =
+          created.assignees && created.assignees.length > 0
+            ? created.assignees.map((a: any) => a.user)
+            : created.assignee
+            ? [created.assignee]
+            : [];
+
+        list.push({
+          ...created,
+          dateString: toDateString(created.date),
+          assignees: assigneesList,
+        });
       }
       return list;
     });
@@ -237,10 +316,25 @@ export async function updateTask(taskId: string, rawInput: TaskInput) {
     const isDateChanged = originalDateStr !== validated.date;
     const hasPenalty = !!existingTask.penalty;
 
+    const hasAssigneeUpdate =
+      validated.assigneeIds !== undefined || validated.assigneeId !== undefined;
+    let targetAssigneeIds: string[] = [];
+    if (validated.assigneeIds !== undefined) {
+      targetAssigneeIds = Array.from(new Set((validated.assigneeIds || []).filter(Boolean)));
+    } else if (validated.assigneeId !== undefined) {
+      targetAssigneeIds = validated.assigneeId ? [validated.assigneeId] : [];
+    }
+
     if (hasPenalty && isDateChanged) {
-      // The task already got a penalty and user changed the date:
-      // The undone task still shows on the original date with its penalty intact.
-      // A new copy of the same task appears on the new date.
+      if (!hasAssigneeUpdate) {
+        const existingAssignees = await db.taskAssignee.findMany({ where: { taskId } });
+        targetAssigneeIds = existingAssignees.map((a) => a.userId);
+        if (targetAssigneeIds.length === 0 && existingTask.assigneeId) {
+          targetAssigneeIds = [existingTask.assigneeId];
+        }
+      }
+      const primaryAssigneeId = targetAssigneeIds[0] || null;
+
       const newTask = await db.task.create({
         data: {
           title: validated.title.trim(),
@@ -253,17 +347,32 @@ export async function updateTask(taskId: string, rawInput: TaskInput) {
           location: validated.location?.trim() || null,
           color: validated.color || existingTask.color,
           teamId: existingTask.teamId,
-          assigneeId: validated.assigneeId !== undefined ? (validated.assigneeId || null) : existingTask.assigneeId,
+          assigneeId: primaryAssigneeId,
           createdById: existingTask.createdById,
           recurrenceRule: existingTask.recurrenceRule,
+          assignees: {
+            create: targetAssigneeIds.map((uid) => ({ userId: uid })),
+          },
         },
         include: {
           team: { select: { id: true, name: true } },
-          assignee: { select: { id: true, name: true, email: true } },
-          createdBy: { select: { id: true, name: true, email: true } },
+          assignee: { select: { id: true, name: true, email: true, image: true } },
+          assignees: {
+            include: {
+              user: { select: { id: true, name: true, email: true, image: true } },
+            },
+          },
+          createdBy: { select: { id: true, name: true, email: true, image: true } },
           penalty: true,
         },
       });
+
+      const assigneesList =
+        newTask.assignees && newTask.assignees.length > 0
+          ? newTask.assignees.map((a: any) => a.user)
+          : newTask.assignee
+          ? [newTask.assignee]
+          : [];
 
       await syncTaskReminderJobs(newTask.id);
       await syncSingleTaskPenalty(newTask.id);
@@ -279,39 +388,56 @@ export async function updateTask(taskId: string, rawInput: TaskInput) {
         task: {
           ...newTask,
           dateString: toDateString(newTask.date),
+          assignees: assigneesList,
         },
         copied: true,
       };
     }
 
-    const updatedTask = await db.task.update({
-      where: { id: taskId },
-      data: {
-        title: validated.title.trim(),
-        date: taskDate,
-        startTime: validated.startTime && validated.startTime.trim() !== "" ? validated.startTime : null,
-        endTime: validated.endTime && validated.endTime.trim() !== "" ? validated.endTime : null,
-        description: validated.description?.trim() || null,
-        status: validated.status,
-        priority: validated.priority,
-        location: validated.location?.trim() || null,
-        color: validated.color || existingTask.color,
-        ...(validated.assigneeId !== undefined && {
-          assigneeId: validated.assigneeId || null,
-        }),
-      },
-      include: {
-        team: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
-        createdBy: { select: { id: true, name: true, email: true } },
-        penalty: true,
-      },
+    const updatedTask = await db.$transaction(async (tx) => {
+      if (hasAssigneeUpdate) {
+        await tx.taskAssignee.deleteMany({ where: { taskId } });
+        if (targetAssigneeIds.length > 0) {
+          await tx.taskAssignee.createMany({
+            data: targetAssigneeIds.map((uid) => ({ taskId, userId: uid })),
+          });
+        }
+      }
+
+      return await tx.task.update({
+        where: { id: taskId },
+        data: {
+          title: validated.title.trim(),
+          date: taskDate,
+          startTime: validated.startTime && validated.startTime.trim() !== "" ? validated.startTime : null,
+          endTime: validated.endTime && validated.endTime.trim() !== "" ? validated.endTime : null,
+          description: validated.description?.trim() || null,
+          status: validated.status,
+          priority: validated.priority,
+          location: validated.location?.trim() || null,
+          color: validated.color || existingTask.color,
+          ...(hasAssigneeUpdate && {
+            assigneeId: targetAssigneeIds[0] || null,
+          }),
+        },
+        include: {
+          team: { select: { id: true, name: true } },
+          assignee: { select: { id: true, name: true, email: true, image: true } },
+          assignees: {
+            include: {
+              user: { select: { id: true, name: true, email: true, image: true } },
+            },
+          },
+          createdBy: { select: { id: true, name: true, email: true, image: true } },
+          penalty: true,
+        },
+      });
     });
 
-    if (validated.assigneeId && validated.assigneeId !== existingTask.assigneeId) {
+    if (hasAssigneeUpdate && targetAssigneeIds[0] && targetAssigneeIds[0] !== existingTask.assigneeId) {
       await db.taskPenalty.updateMany({
         where: { taskId: updatedTask.id },
-        data: { userId: validated.assigneeId },
+        data: { userId: targetAssigneeIds[0] },
       });
     }
 
@@ -324,11 +450,19 @@ export async function updateTask(taskId: string, rawInput: TaskInput) {
       revalidatePath(`/teams/${updatedTask.teamId}`);
     }
 
+    const assigneesList =
+      updatedTask.assignees && updatedTask.assignees.length > 0
+        ? updatedTask.assignees.map((a: any) => a.user)
+        : updatedTask.assignee
+        ? [updatedTask.assignee]
+        : [];
+
     return {
       success: true,
       task: {
         ...updatedTask,
         dateString: toDateString(updatedTask.date),
+        assignees: assigneesList,
       },
     };
   } catch (error: unknown) {
@@ -365,8 +499,13 @@ export async function toggleTaskComplete(taskId: string) {
       data: { status: newStatus },
       include: {
         team: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
-        createdBy: { select: { id: true, name: true, email: true } },
+        assignee: { select: { id: true, name: true, email: true, image: true } },
+        assignees: {
+          include: {
+            user: { select: { id: true, name: true, email: true, image: true } },
+          },
+        },
+        createdBy: { select: { id: true, name: true, email: true, image: true } },
         penalty: true,
       },
     });
@@ -376,7 +515,21 @@ export async function toggleTaskComplete(taskId: string) {
 
     revalidatePath("/calendar");
     revalidatePath("/tasks");
-    return { success: true, task };
+    const assigneesList =
+      task.assignees && task.assignees.length > 0
+        ? task.assignees.map((a: any) => a.user)
+        : task.assignee
+        ? [task.assignee]
+        : [];
+
+    return {
+      success: true,
+      task: {
+        ...task,
+        dateString: toDateString(task.date),
+        assignees: assigneesList,
+      },
+    };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to toggle task";
     return { success: false, error: message };
@@ -455,6 +608,16 @@ export async function rescheduleTask(rawInput: RescheduleTaskInput) {
       // The task already got a penalty and user changed the date:
       // The undone task still shows on the original date with its penalty intact.
       // A new copy of the same task appears on the new date.
+      const existingAssignees = await db.taskAssignee.findMany({
+        where: { taskId: existingTask.id },
+      });
+      const targetAssigneeIds =
+        existingAssignees.length > 0
+          ? existingAssignees.map((a) => a.userId)
+          : existingTask.assigneeId
+          ? [existingTask.assigneeId]
+          : [];
+
       const newTask = await db.task.create({
         data: {
           title: existingTask.title,
@@ -470,14 +633,29 @@ export async function rescheduleTask(rawInput: RescheduleTaskInput) {
           assigneeId: existingTask.assigneeId,
           createdById: existingTask.createdById,
           recurrenceRule: existingTask.recurrenceRule,
+          assignees: {
+            create: targetAssigneeIds.map((uid) => ({ userId: uid })),
+          },
         },
         include: {
           team: { select: { id: true, name: true } },
-          assignee: { select: { id: true, name: true, email: true } },
-          createdBy: { select: { id: true, name: true, email: true } },
+          assignee: { select: { id: true, name: true, email: true, image: true } },
+          assignees: {
+            include: {
+              user: { select: { id: true, name: true, email: true, image: true } },
+            },
+          },
+          createdBy: { select: { id: true, name: true, email: true, image: true } },
           penalty: true,
         },
       });
+
+      const assigneesList =
+        newTask.assignees && newTask.assignees.length > 0
+          ? newTask.assignees.map((a: any) => a.user)
+          : newTask.assignee
+          ? [newTask.assignee]
+          : [];
 
       await syncTaskReminderJobs(newTask.id);
       await syncSingleTaskPenalty(newTask.id);
@@ -493,6 +671,7 @@ export async function rescheduleTask(rawInput: RescheduleTaskInput) {
         task: {
           ...newTask,
           dateString: toDateString(newTask.date),
+          assignees: assigneesList,
         },
         copied: true,
       };
@@ -507,8 +686,13 @@ export async function rescheduleTask(rawInput: RescheduleTaskInput) {
       },
       include: {
         team: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
-        createdBy: { select: { id: true, name: true, email: true } },
+        assignee: { select: { id: true, name: true, email: true, image: true } },
+        assignees: {
+          include: {
+            user: { select: { id: true, name: true, email: true, image: true } },
+          },
+        },
+        createdBy: { select: { id: true, name: true, email: true, image: true } },
         penalty: true,
       },
     });
@@ -522,11 +706,19 @@ export async function rescheduleTask(rawInput: RescheduleTaskInput) {
       revalidatePath(`/teams/${task.teamId}`);
     }
 
+    const assigneesList =
+      task.assignees && task.assignees.length > 0
+        ? task.assignees.map((a: any) => a.user)
+        : task.assignee
+        ? [task.assignee]
+        : [];
+
     return {
       success: true,
       task: {
         ...task,
         dateString: toDateString(task.date),
+        assignees: assigneesList,
       },
     };
   } catch (error: unknown) {
@@ -559,7 +751,11 @@ export async function getCalendarTasks(filter: string = "all") {
       // Personal tasks: teamId must be null
       whereCondition = {
         teamId: null,
-        OR: [{ assigneeId: userId }, { createdById: userId }],
+        OR: [
+          { assigneeId: userId },
+          { createdById: userId },
+          { assignees: { some: { userId } } },
+        ],
       };
     } else if (filter === "team" || filter === "teams") {
       // Team tasks: only tasks with teamId in user's teams, strictly team tasks
@@ -570,13 +766,19 @@ export async function getCalendarTasks(filter: string = "all") {
       // Team tasks assigned to current user
       whereCondition = {
         teamId: { in: userTeamIds, not: null },
-        assigneeId: userId,
+        OR: [
+          { assigneeId: userId },
+          { assignees: { some: { userId } } },
+        ],
       };
     } else if (filter === "team-assigned-to-others" || filter === "team-others") {
       // Team tasks assigned to others (not current user)
       whereCondition = {
         teamId: { in: userTeamIds, not: null },
-        OR: [{ assigneeId: { not: userId } }, { assigneeId: null }],
+        AND: [
+          { OR: [{ assigneeId: { not: userId } }, { assigneeId: null }] },
+          { assignees: { none: { userId } } },
+        ],
       };
     } else if (filter.endsWith(":me") || filter.endsWith("-me")) {
       const targetTeamId = filter.replace(/:me$|-me$/, "");
@@ -587,7 +789,10 @@ export async function getCalendarTasks(filter: string = "all") {
 
       whereCondition = {
         teamId: targetTeamId,
-        assigneeId: userId,
+        OR: [
+          { assigneeId: userId },
+          { assignees: { some: { userId } } },
+        ],
       };
     } else if (filter.endsWith(":others") || filter.endsWith("-others")) {
       const targetTeamId = filter.replace(/:others$|-others$/, "");
@@ -598,7 +803,10 @@ export async function getCalendarTasks(filter: string = "all") {
 
       whereCondition = {
         teamId: targetTeamId,
-        OR: [{ assigneeId: { not: userId } }, { assigneeId: null }],
+        AND: [
+          { OR: [{ assigneeId: { not: userId } }, { assigneeId: null }] },
+          { assignees: { none: { userId } } },
+        ],
       };
     } else if (filter !== "all") {
       // Specific team filter: ensure user is member of this team
@@ -617,6 +825,7 @@ export async function getCalendarTasks(filter: string = "all") {
           // Personal tasks
           { teamId: null, assigneeId: userId },
           { teamId: null, createdById: userId },
+          { teamId: null, assignees: { some: { userId } } },
           // Team tasks in teams user belongs to
           { teamId: { in: userTeamIds, not: null } },
         ],
@@ -627,18 +836,33 @@ export async function getCalendarTasks(filter: string = "all") {
       where: whereCondition,
       include: {
         team: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
-        createdBy: { select: { id: true, name: true, email: true } },
+        assignee: { select: { id: true, name: true, email: true, image: true } },
+        assignees: {
+          include: {
+            user: { select: { id: true, name: true, email: true, image: true } },
+          },
+        },
+        createdBy: { select: { id: true, name: true, email: true, image: true } },
         penalty: true,
       },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     });
 
     // Format tasks for serialization
-    return tasks.map((t) => ({
-      ...t,
-      dateString: toDateString(t.date),
-    }));
+    return tasks.map((t) => {
+      const assigneesList =
+        t.assignees && t.assignees.length > 0
+          ? t.assignees.map((a: any) => a.user)
+          : t.assignee
+          ? [t.assignee]
+          : [];
+
+      return {
+        ...t,
+        dateString: toDateString(t.date),
+        assignees: assigneesList,
+      };
+    });
   } catch (error) {
     console.error("Get calendar tasks error:", error);
     return [];
@@ -650,7 +874,7 @@ export async function getCalendarTasks(filter: string = "all") {
  */
 export async function convertPersonalTaskToTeamTask(
   taskId: string,
-  rawInput: { teamId: string; assigneeId?: string | null }
+  rawInput: { teamId: string; assigneeId?: string | null; assigneeIds?: string[] | null }
 ) {
   try {
     const userId = await getAuthUserId();
@@ -698,36 +922,58 @@ export async function convertPersonalTaskToTeamTask(
       };
     }
 
-    // Determine target assignee (default to current user if unspecified)
-    let targetAssigneeId = userId;
-    if (validated.assigneeId && validated.assigneeId.trim() !== "") {
+    // Determine target assignees
+    let targetAssigneeIds: string[] = [];
+    if (validated.assigneeIds && validated.assigneeIds.length > 0) {
+      targetAssigneeIds = Array.from(new Set(validated.assigneeIds.filter(Boolean)));
+    } else if (validated.assigneeId && validated.assigneeId.trim() !== "") {
+      targetAssigneeIds = [validated.assigneeId];
+    } else {
+      targetAssigneeIds = [userId];
+    }
+
+    // Verify all target assignees are members of this team
+    for (const memberId of targetAssigneeIds) {
       const targetMembership = await db.teamMember.findUnique({
         where: {
           teamId_userId: {
             teamId: validated.teamId,
-            userId: validated.assigneeId,
+            userId: memberId,
           },
         },
       });
       if (!targetMembership) {
-        return { success: false, error: "The selected assignee is not a member of this team." };
+        return { success: false, error: "One or more selected assignees are not members of this team." };
       }
-      targetAssigneeId = validated.assigneeId;
     }
 
-    // Update the task to team task
-    const updatedTask = await db.task.update({
-      where: { id: taskId },
-      data: {
-        teamId: validated.teamId,
-        assigneeId: targetAssigneeId,
-      },
-      include: {
-        team: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
-        createdBy: { select: { id: true, name: true, email: true } },
-        penalty: true,
-      },
+    const primaryAssigneeId = targetAssigneeIds[0] || userId;
+
+    // Update the task to team task and assignees
+    const updatedTask = await db.$transaction(async (tx) => {
+      await tx.taskAssignee.deleteMany({ where: { taskId } });
+      await tx.taskAssignee.createMany({
+        data: targetAssigneeIds.map((uid) => ({ taskId, userId: uid })),
+      });
+
+      return await tx.task.update({
+        where: { id: taskId },
+        data: {
+          teamId: validated.teamId,
+          assigneeId: primaryAssigneeId,
+        },
+        include: {
+          team: { select: { id: true, name: true } },
+          assignee: { select: { id: true, name: true, email: true, image: true } },
+          assignees: {
+            include: {
+              user: { select: { id: true, name: true, email: true, image: true } },
+            },
+          },
+          createdBy: { select: { id: true, name: true, email: true, image: true } },
+          penalty: true,
+        },
+      });
     });
 
     // If task had a penalty, update it to reflect team task classification & assignee
@@ -737,7 +983,7 @@ export async function convertPersonalTaskToTeamTask(
         data: {
           taskType: TaskType.TEAM,
           teamId: validated.teamId,
-          userId: targetAssigneeId,
+          userId: primaryAssigneeId,
         },
       });
     }
@@ -750,11 +996,19 @@ export async function convertPersonalTaskToTeamTask(
     revalidatePath("/tasks");
     revalidatePath(`/teams/${validated.teamId}`);
 
+    const assigneesList =
+      updatedTask.assignees && updatedTask.assignees.length > 0
+        ? updatedTask.assignees.map((a: any) => a.user)
+        : updatedTask.assignee
+        ? [updatedTask.assignee]
+        : [];
+
     return {
       success: true,
       task: {
         ...updatedTask,
         dateString: toDateString(updatedTask.date),
+        assignees: assigneesList,
       },
     };
   } catch (error: unknown) {

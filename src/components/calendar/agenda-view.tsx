@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toDateString, formatTaskTiming } from "@/lib/date-utils";
 import { format, parseISO } from "date-fns";
 import { Check, Clock, MapPin, Users, Flag, Calendar as CalendarIcon, Search } from "lucide-react";
+import { AssigneeBadge } from "@/components/tasks/assignee-badge";
 
 interface AgendaViewProps {
   tasks: any[];
@@ -195,6 +196,13 @@ export function AgendaView({
                                   <Users className="h-3 w-3 shrink-0" />
                                   <span className="truncate max-w-[140px]">{task.team?.name || "Team Task"}</span>
                                 </span>
+                              )}
+
+                              {(task.assignees?.length > 0 || task.assignee) && (
+                                <AssigneeBadge
+                                  assignees={task.assignees}
+                                  singleAssignee={task.assignee}
+                                />
                               )}
 
                               {task.priority && (

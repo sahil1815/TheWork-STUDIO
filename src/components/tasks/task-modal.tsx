@@ -29,6 +29,7 @@ import {
   UserCheck,
   Send,
 } from "lucide-react";
+import { AssigneeMultiSelect } from "@/components/tasks/assignee-multi-select";
 
 interface TeamOption {
   id: string;
@@ -43,6 +44,7 @@ interface TaskModalProps {
   defaultDate?: string;
   defaultStartTime?: string;
   teams?: TeamOption[];
+  currentUserId?: string;
   onTaskSaved?: () => void;
   onOpenProposeTaskModal?: (prefilledData?: {
     title?: string;
@@ -66,6 +68,7 @@ export interface TaskDraft {
   location: string;
   color: string;
   teamId: string; // "" = Personal Task (No Team)
+  assigneeIds?: string[];
   isExpanded: boolean;
 }
 
@@ -91,6 +94,7 @@ function createEmptyDraft(defaultDate?: string, defaultStartTime?: string, teamI
     location: "",
     color: "#3b82f6",
     teamId,
+    assigneeIds: [],
     isExpanded: true,
   };
 }
@@ -102,6 +106,7 @@ export function TaskModal({
   defaultDate,
   defaultStartTime,
   teams = [],
+  currentUserId,
   onTaskSaved,
   onOpenProposeTaskModal,
 }: TaskModalProps) {
@@ -118,11 +123,30 @@ export function TaskModal({
   const [editLocation, setEditLocation] = useState("");
   const [editColor, setEditColor] = useState("#3b82f6");
   const [editTeamId, setEditTeamId] = useState<string>("");
-  const [editAssigneeId, setEditAssigneeId] = useState<string>("");
+  const [editAssigneeIds, setEditAssigneeIds] = useState<string[]>([]);
   const [teamMembers, setTeamMembers] = useState<
-    { id: string; name: string | null; email: string; role: string }[]
+    { id: string; name: string | null; email: string; role: string; image?: string | null }[]
   >([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+
+  // Cache for batch task creation team members
+  const [teamMembersMap, setTeamMembersMap] = useState<
+    Record<string, Array<{ id: string; name: string | null; email: string; role?: string }>>
+  >({});
+  const [loadingTeamId, setLoadingTeamId] = useState<string | null>(null);
+
+  const fetchMembersForTeam = async (teamId: string) => {
+    if (!teamId || teamMembersMap[teamId]) return;
+    setLoadingTeamId(teamId);
+    try {
+      const members = await getTeamMembers(teamId);
+      setTeamMembersMap((prev) => ({ ...prev, [teamId]: members }));
+    } catch {
+      // ignore
+    } finally {
+      setLoadingTeamId(null);
+    }
+  };
 
   // Multiple task creation drafts
   const [tasks, setTasks] = useState<TaskDraft[]>([]);
@@ -142,7 +166,14 @@ export function TaskModal({
       setEditLocation(taskToEdit.location || "");
       setEditColor(taskToEdit.color || "#3b82f6");
       setEditTeamId(taskToEdit.teamId || "");
-      setEditAssigneeId(taskToEdit.assigneeId || "");
+
+      const initialAssigneeIds: string[] =
+        Array.isArray(taskToEdit.assignees) && taskToEdit.assignees.length > 0
+          ? taskToEdit.assignees.map((a: any) => a.id || a.userId)
+          : taskToEdit.assigneeId
+          ? [taskToEdit.assigneeId]
+          : [];
+      setEditAssigneeIds(initialAssigneeIds);
 
       const activeTeamId = taskToEdit.teamId;
       if (activeTeamId) {
@@ -159,6 +190,7 @@ export function TaskModal({
     } else {
       setTasks([createEmptyDraft(defaultDate, defaultStartTime)]);
       setTeamMembers([]);
+      setEditAssigneeIds([]);
     }
     setError(null);
   }, [taskToEdit, defaultDate, defaultStartTime, isOpen]);
@@ -170,14 +202,18 @@ export function TaskModal({
       getTeamMembers(editTeamId)
         .then((members) => {
           setTeamMembers(members);
-          if (members.length > 0 && !editAssigneeId) {
-            setEditAssigneeId(members[0].id);
+          if (members.length > 0 && editAssigneeIds.length === 0) {
+            const defaultId =
+              currentUserId && members.some((m) => m.id === currentUserId)
+                ? currentUserId
+                : members[0].id;
+            setEditAssigneeIds([defaultId]);
           }
         })
         .catch(() => {})
         .finally(() => setLoadingMembers(false));
     }
-  }, [editTeamId, isEditing, taskToEdit?.teamId]);
+  }, [editTeamId, isEditing, taskToEdit?.teamId, currentUserId]);
 
   if (!isOpen) return null;
 
@@ -201,6 +237,7 @@ export function TaskModal({
       ...source,
       id: Math.random().toString(36).substring(2, 9),
       title: source.title ? `${source.title} (Copy)` : "",
+      assigneeIds: source.assigneeIds ? [...source.assigneeIds] : [],
       isExpanded: true,
     };
     const next = [...tasks];
@@ -269,7 +306,8 @@ export function TaskModal({
           location: editLocation || null,
           color: editColor,
           teamId: editTeamId || null,
-          assigneeId: editAssigneeId || undefined,
+          assigneeId: editAssigneeIds[0] || undefined,
+          assigneeIds: editAssigneeIds,
         };
 
         const result = await updateTask(taskToEdit.id, payload);
@@ -283,7 +321,8 @@ export function TaskModal({
           const targetTaskId = result.task?.id || taskToEdit.id;
           const convResult = await convertPersonalTaskToTeamTask(targetTaskId, {
             teamId: editTeamId,
-            assigneeId: editAssigneeId || undefined,
+            assigneeId: editAssigneeIds[0] || undefined,
+            assigneeIds: editAssigneeIds,
           });
           if (!convResult.success) {
             setError(convResult.error || "Failed to convert to team task");
@@ -356,6 +395,8 @@ export function TaskModal({
         location: t.location.trim() || null,
         color: t.color,
         teamId: t.teamId || null,
+        assigneeIds: t.assigneeIds && t.assigneeIds.length > 0 ? t.assigneeIds : undefined,
+        assigneeId: t.assigneeIds && t.assigneeIds.length > 0 ? t.assigneeIds[0] : undefined,
       }));
 
       const result = await createBatchTasks(payloads);
@@ -613,51 +654,27 @@ export function TaskModal({
                     </div>
 
                     {/* Member Attribution: Assigned To & Created By */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2.5 border-t border-purple-200/60 dark:border-purple-800/60">
+                    <div className="space-y-3 pt-2.5 border-t border-purple-200/60 dark:border-purple-800/60">
                       {/* Assigned To */}
-                      <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/90 dark:bg-zinc-900 border border-purple-100 dark:border-purple-900/60 shadow-2xs">
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/80 text-purple-700 dark:text-purple-300 mt-0.5">
-                          <UserCheck className="h-3.5 w-3.5" />
-                        </div>
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <span className="block text-[10px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-400">
-                            Assigned To
-                          </span>
-                          {teamMembers.length > 0 ? (
-                            <select
-                              value={editAssigneeId}
-                              onChange={(e) => setEditAssigneeId(e.target.value)}
-                              className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer"
-                            >
-                              {teamMembers.map((m) => (
-                                <option
-                                  key={m.id}
-                                  value={m.id}
-                                  className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-                                >
-                                  {m.name || m.email} ({m.role.toLowerCase()})
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <span className="block text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                              {taskToEdit.assignee?.name || taskToEdit.assignee?.email || "Unassigned"}
-                            </span>
-                          )}
-                          {taskToEdit.assignee?.email && (
-                            <span className="block text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
-                              {taskToEdit.assignee.email}
-                            </span>
-                          )}
-                        </div>
+                      <div className="space-y-1">
+                        <AssigneeMultiSelect
+                          label="Assigned Members"
+                          members={teamMembers}
+                          selectedMemberIds={editAssigneeIds}
+                          onChange={setEditAssigneeIds}
+                          currentUserId={currentUserId}
+                          loading={loadingMembers}
+                          placeholder="Select assigned team members..."
+                          compact
+                        />
                       </div>
 
                       {/* Created By */}
-                      <div className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/90 dark:bg-zinc-900 border border-purple-100 dark:border-purple-900/60 shadow-2xs">
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 mt-0.5">
+                      <div className="flex items-center gap-2.5 p-2.5 rounded-lg bg-white/90 dark:bg-zinc-900 border border-purple-100 dark:border-purple-900/60 shadow-2xs">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300">
                           <User className="h-3.5 w-3.5" />
                         </div>
-                        <div className="min-w-0 flex-1 space-y-1">
+                        <div className="min-w-0 flex-1 space-y-0.5">
                           <span className="block text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
                             Created By
                           </span>
@@ -699,28 +716,16 @@ export function TaskModal({
                     {/* If converting, show assignee selector */}
                     {editTeamId && (
                       <div className="p-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/30 space-y-2 text-xs">
-                        <p className="text-[11px] text-indigo-700 dark:text-indigo-300 font-semibold">
-                          Assign this task to a team member:
-                        </p>
-                        {loadingMembers ? (
-                          <p className="text-[11px] text-zinc-400">Loading members...</p>
-                        ) : (
-                          <select
-                            value={editAssigneeId}
-                            onChange={(e) => setEditAssigneeId(e.target.value)}
-                            className="w-full rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          >
-                            {teamMembers.map((m) => (
-                              <option
-                                key={m.id}
-                                value={m.id}
-                                className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-                              >
-                                {m.name || m.email} ({m.role.toLowerCase()})
-                              </option>
-                            ))}
-                          </select>
-                        )}
+                        <AssigneeMultiSelect
+                          label="Assign to team member(s)"
+                          members={teamMembers}
+                          selectedMemberIds={editAssigneeIds}
+                          onChange={setEditAssigneeIds}
+                          currentUserId={currentUserId}
+                          loading={loadingMembers}
+                          placeholder="Select assigned team members..."
+                          compact
+                        />
                         <p className="text-[10px] text-indigo-600 dark:text-indigo-400">
                           Saving will convert this personal task into a team task.
                         </p>
@@ -1026,9 +1031,15 @@ export function TaskModal({
                                 </div>
                                 <select
                                   value={task.teamId}
-                                  onChange={(e) =>
-                                    handleUpdateTaskField(task.id, "teamId", e.target.value)
-                                  }
+                                  onChange={(e) => {
+                                    const newTeamId = e.target.value;
+                                    handleUpdateTaskField(task.id, "teamId", newTeamId);
+                                    if (newTeamId) {
+                                      fetchMembersForTeam(newTeamId);
+                                    } else {
+                                      handleUpdateTaskField(task.id, "assigneeIds", []);
+                                    }
+                                  }}
                                   className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-1.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 >
                                   <option value="" className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">
@@ -1047,6 +1058,24 @@ export function TaskModal({
                               </div>
                             )}
                           </div>
+
+                          {/* Multi-assignee selection when team task in draft */}
+                          {task.teamId && (
+                            <div className="p-3 rounded-lg border border-purple-200 dark:border-purple-800/80 bg-purple-50/40 dark:bg-purple-950/20 space-y-1.5">
+                              <AssigneeMultiSelect
+                                label="Assign to Team Members"
+                                members={teamMembersMap[task.teamId] || []}
+                                selectedMemberIds={task.assigneeIds || []}
+                                onChange={(ids) =>
+                                  handleUpdateTaskField(task.id, "assigneeIds", ids)
+                                }
+                                currentUserId={currentUserId}
+                                loading={loadingTeamId === task.teamId}
+                                placeholder="Select assigned members (defaults to you)..."
+                                compact
+                              />
+                            </div>
+                          )}
 
                           {/* Color Label & Description */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">

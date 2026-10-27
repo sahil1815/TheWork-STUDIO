@@ -8,6 +8,7 @@ import { TaskModal } from "./task-modal";
 import { ProposeTaskModal } from "./propose-task-modal";
 import { ConvertTaskModal } from "./convert-task-modal";
 import { PenaltyDashboardWidget } from "./penalty-dashboard-widget";
+import { AssigneeBadge } from "./assignee-badge";
 import {
   toggleTaskComplete,
   getCalendarTasks,
@@ -215,10 +216,14 @@ export function TasksList({
 
     // 5. Assignment Filter (Team tasks or tasks with a team)
     if (section !== "PERSONAL" && assignmentFilter !== "ALL" && t.teamId !== null) {
-      if (assignmentFilter === "ME" && t.assigneeId !== currentUserId) {
+      const isAssignedToMe =
+        (Array.isArray(t.assignees) && t.assignees.some((a: any) => a.id === currentUserId)) ||
+        t.assigneeId === currentUserId;
+
+      if (assignmentFilter === "ME" && !isAssignedToMe) {
         return false;
       }
-      if (assignmentFilter === "OTHERS" && t.assigneeId === currentUserId) {
+      if (assignmentFilter === "OTHERS" && isAssignedToMe) {
         return false;
       }
     }
@@ -542,12 +547,10 @@ export function TasksList({
                         <span>{formatTaskTiming(task.startTime, task.endTime)}</span>
                       </span>
 
-                      {task.assignee && (
-                        <span className="flex items-center gap-1 font-medium text-zinc-600 dark:text-zinc-400">
-                          <User className="h-3 w-3" />
-                          <span>{task.assignee.name || task.assignee.email}</span>
-                        </span>
-                      )}
+                      <AssigneeBadge
+                        assignees={task.assignees}
+                        singleAssignee={task.assignee}
+                      />
 
                       {task.location && (
                         <span className="flex items-center gap-1">
@@ -619,6 +622,7 @@ export function TasksList({
         onClose={() => setModalOpen(false)}
         taskToEdit={selectedTask}
         teams={teams}
+        currentUserId={currentUserId}
         onTaskSaved={refreshTasks}
         onOpenProposeTaskModal={
           currentUserId

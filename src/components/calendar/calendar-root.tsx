@@ -292,6 +292,7 @@ export function CalendarRoot({
         defaultDate={modalDefaultDate}
         defaultStartTime={modalDefaultStartTime}
         teams={teams}
+        currentUserId={currentUserId}
         onTaskSaved={refreshTasks}
         onOpenProposeTaskModal={currentUserId ? handleOpenProposeTask : undefined}
       />

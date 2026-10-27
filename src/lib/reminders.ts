@@ -66,6 +66,18 @@ export async function syncTaskReminderJobs(taskId: string): Promise<void> {
             reminderPreference: true,
           },
         },
+        assignees: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                timeZone: true,
+                reminderPreference: true,
+              },
+            },
+          },
+        },
         createdBy: {
           select: {
             id: true,
@@ -79,10 +91,6 @@ export async function syncTaskReminderJobs(taskId: string): Promise<void> {
     });
 
     if (!task) return;
-
-    // Recipient user is assignee (or creator for unassigned tasks)
-    const targetUser = task.assignee || task.createdBy;
-    if (!targetUser) return;
 
     // 1. If task is completed (DONE) or CANCELLED, cancel all pending reminder jobs
     if (task.status === TaskStatus.DONE || task.status === TaskStatus.CANCELLED) {
@@ -98,81 +106,106 @@ export async function syncTaskReminderJobs(taskId: string): Promise<void> {
       return;
     }
 
-    // 2. Determine effective reminder preferences
-    const userPref = targetUser.reminderPreference;
-    const taskOverride = task.reminderOverrides.find((o) => o.userId === targetUser.id);
+    // Determine target users: all assigned users (or single assignee or creator for unassigned tasks)
+    const targetUsers =
+      task.assignees && task.assignees.length > 0
+        ? task.assignees.map((a) => a.user)
+        : task.assignee
+        ? [task.assignee]
+        : task.createdBy
+        ? [task.createdBy]
+        : [];
 
-    const isEnabled = taskOverride ? taskOverride.enabled : userPref ? userPref.enabled : true;
+    if (targetUsers.length === 0) return;
 
-    if (!isEnabled) {
-      // User or task has disabled reminders
-      await db.reminderJob.updateMany({
-        where: {
-          taskId: task.id,
-          status: ReminderJobStatus.PENDING,
-        },
-        data: {
-          status: ReminderJobStatus.CANCELLED,
-        },
-      });
-      return;
-    }
-
-    const offsets: number[] = taskOverride?.offsets?.length
-      ? taskOverride.offsets
-      : userPref?.defaultOffsets?.length
-      ? userPref.defaultOffsets
-      : DEFAULT_REMINDER_OFFSETS;
+    const targetUserIds = targetUsers.map((u) => u.id);
+    // Cancel reminder jobs for any users no longer assigned
+    await db.reminderJob.updateMany({
+      where: {
+        taskId: task.id,
+        userId: { notIn: targetUserIds },
+        status: ReminderJobStatus.PENDING,
+      },
+      data: {
+        status: ReminderJobStatus.CANCELLED,
+      },
+    });
 
     const now = new Date();
-    const userTz = targetUser.timeZone || "UTC";
 
-    // 3. For each offset, compute UTC sendAt and upsert reminder jobs
-    for (const offset of offsets) {
-      const sendAt = calculateReminderSendTime(
-        task.date,
-        task.startTime,
-        offset,
-        userTz
-      );
+    // 2. Schedule reminders for each target user
+    for (const targetUser of targetUsers) {
+      const userPref = targetUser.reminderPreference;
+      const taskOverride = task.reminderOverrides.find((o) => o.userId === targetUser.id);
 
-      // Only schedule if the reminder time is in the future
-      if (sendAt > now) {
-        await db.reminderJob.upsert({
-          where: {
-            taskId_userId_offsetMinutes: {
-              taskId: task.id,
-              userId: targetUser.id,
-              offsetMinutes: offset,
-            },
-          },
-          update: {
-            sendAt,
-            status: ReminderJobStatus.PENDING,
-            attempts: 0,
-            error: null,
-          },
-          create: {
-            taskId: task.id,
-            userId: targetUser.id,
-            offsetMinutes: offset,
-            sendAt,
-            status: ReminderJobStatus.PENDING,
-          },
-        });
-      } else {
-        // If sendAt is in the past and a job already existed as pending, mark it SKIPPED
+      const isEnabled = taskOverride ? taskOverride.enabled : userPref ? userPref.enabled : true;
+
+      if (!isEnabled) {
         await db.reminderJob.updateMany({
           where: {
             taskId: task.id,
             userId: targetUser.id,
-            offsetMinutes: offset,
             status: ReminderJobStatus.PENDING,
           },
           data: {
-            status: ReminderJobStatus.SKIPPED,
+            status: ReminderJobStatus.CANCELLED,
           },
         });
+        continue;
+      }
+
+      const offsets: number[] = taskOverride?.offsets?.length
+        ? taskOverride.offsets
+        : userPref?.defaultOffsets?.length
+        ? userPref.defaultOffsets
+        : DEFAULT_REMINDER_OFFSETS;
+
+      const userTz = targetUser.timeZone || "UTC";
+
+      for (const offset of offsets) {
+        const sendAt = calculateReminderSendTime(
+          task.date,
+          task.startTime,
+          offset,
+          userTz
+        );
+
+        if (sendAt > now) {
+          await db.reminderJob.upsert({
+            where: {
+              taskId_userId_offsetMinutes: {
+                taskId: task.id,
+                userId: targetUser.id,
+                offsetMinutes: offset,
+              },
+            },
+            update: {
+              sendAt,
+              status: ReminderJobStatus.PENDING,
+              attempts: 0,
+              error: null,
+            },
+            create: {
+              taskId: task.id,
+              userId: targetUser.id,
+              offsetMinutes: offset,
+              sendAt,
+              status: ReminderJobStatus.PENDING,
+            },
+          });
+        } else {
+          await db.reminderJob.updateMany({
+            where: {
+              taskId: task.id,
+              userId: targetUser.id,
+              offsetMinutes: offset,
+              status: ReminderJobStatus.PENDING,
+            },
+            data: {
+              status: ReminderJobStatus.SKIPPED,
+            },
+          });
+        }
       }
     }
   } catch (error) {

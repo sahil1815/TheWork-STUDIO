@@ -5,6 +5,7 @@ import { Users, X, AlertCircle, ArrowRight, Check, Loader2 } from "lucide-react"
 import { convertPersonalTaskToTeamTask, getTeamMembers } from "@/actions/task-actions";
 import { format, parseISO } from "date-fns";
 import { formatTaskTiming } from "@/lib/date-utils";
+import { AssigneeMultiSelect } from "@/components/tasks/assignee-multi-select";
 
 interface TeamOption {
   id: string;
@@ -42,8 +43,8 @@ export function ConvertTaskModal({
   const [selectedTeamId, setSelectedTeamId] = useState<string>(
     eligibleTeams[0]?.id || ""
   );
-  const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>(
-    currentUserId || ""
+  const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>(
+    currentUserId ? [currentUserId] : []
   );
   const [teamMembers, setTeamMembers] = useState<TeamMemberOption[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
@@ -64,9 +65,11 @@ export function ConvertTaskModal({
         setTeamMembers(members);
         // Default assignee to current user if member of team, otherwise first member
         if (currentUserId && members.some((m) => m.id === currentUserId)) {
-          setSelectedAssigneeId(currentUserId);
+          setSelectedAssigneeIds([currentUserId]);
         } else if (members.length > 0) {
-          setSelectedAssigneeId(members[0].id);
+          setSelectedAssigneeIds([members[0].id]);
+        } else {
+          setSelectedAssigneeIds([]);
         }
       })
       .catch((err) => {
@@ -92,13 +95,19 @@ export function ConvertTaskModal({
       return;
     }
 
+    if (selectedAssigneeIds.length === 0) {
+      setError("Please select at least one assignee for this team task.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
     try {
       const res = await convertPersonalTaskToTeamTask(task.id, {
         teamId: selectedTeamId,
-        assigneeId: selectedAssigneeId || undefined,
+        assigneeId: selectedAssigneeIds[0] || undefined,
+        assigneeIds: selectedAssigneeIds,
       });
 
       if (!res.success) {
@@ -208,37 +217,19 @@ export function ConvertTaskModal({
                 </select>
               </div>
 
-              {/* Responsible Member / Assignee */}
+              {/* Responsible Members / Assignees */}
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  Responsible Member / Assignee <span className="text-red-500">*</span>
-                </label>
-                {loadingMembers ? (
-                  <div className="flex items-center gap-2 py-2 text-xs text-zinc-400">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    <span>Loading team members...</span>
-                  </div>
-                ) : (
-                  <select
-                    value={selectedAssigneeId}
-                    onChange={(e) => setSelectedAssigneeId(e.target.value)}
-                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-3 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    required
-                  >
-                    {teamMembers.map((m) => (
-                      <option
-                        key={m.id}
-                        value={m.id}
-                        className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-                      >
-                        {m.name || m.email} ({m.role.toLowerCase()})
-                        {m.id === currentUserId ? " — You" : ""}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <p className="text-[11px] text-zinc-500 mt-1">
-                  The responsible member will be notified and accountable for this task.
+                <AssigneeMultiSelect
+                  label="Responsible Members / Assignees"
+                  members={teamMembers}
+                  selectedMemberIds={selectedAssigneeIds}
+                  onChange={setSelectedAssigneeIds}
+                  currentUserId={currentUserId}
+                  loading={loadingMembers}
+                  placeholder="Select one or more team members..."
+                />
+                <p className="text-[11px] text-zinc-500 mt-1.5">
+                  Assigned members will be notified and accountable for this task.
                 </p>
               </div>
 
@@ -254,7 +245,7 @@ export function ConvertTaskModal({
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || loadingMembers || !selectedTeamId}
+                  disabled={submitting || loadingMembers || !selectedTeamId || selectedAssigneeIds.length === 0}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition"
                 >
                   {submitting ? (
