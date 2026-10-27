@@ -139,7 +139,7 @@ export function TasksList({
       } else {
         filterParam =
           assignmentFilter === "ME"
-            ? "team-assigned-to-me"
+            ? "all-assigned-to-me"
             : assignmentFilter === "OTHERS"
             ? "team-assigned-to-others"
             : "all";
@@ -214,9 +214,10 @@ export function TasksList({
     // 4. Priority Filter
     if (priorityFilter !== "ALL" && t.priority !== priorityFilter) return false;
 
-    // 5. Assignment Filter (Team tasks or tasks with a team)
-    if (section !== "PERSONAL" && assignmentFilter !== "ALL" && t.teamId !== null) {
+    // 5. Assignment Filter
+    if (section !== "PERSONAL" && assignmentFilter !== "ALL") {
       const isAssignedToMe =
+        t.teamId === null ||
         (Array.isArray(t.assignees) && t.assignees.some((a: any) => a.id === currentUserId)) ||
         t.assigneeId === currentUserId;
 

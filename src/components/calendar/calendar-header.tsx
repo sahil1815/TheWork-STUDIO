@@ -182,6 +182,7 @@ export function CalendarHeader({
               className="bg-transparent text-xs font-medium focus:outline-none cursor-pointer max-w-[140px] sm:max-w-none truncate"
             >
               <option value="all">All Calendars</option>
+              <option value="all-assigned-to-me">All Tasks (Assigned to Me)</option>
               <option value="personal">Personal Tasks Only</option>
               <option value="team">All Team Tasks</option>
               <option value="team-assigned-to-me">Team Tasks (Assigned to Me)</option>

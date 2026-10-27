@@ -41,7 +41,7 @@ export default async function TasksPage({
       ? resolvedParams.teamId
       : resolvedParams?.section === "team"
       ? (initialAssignment === "ME" ? "team-assigned-to-me" : initialAssignment === "OTHERS" ? "team-assigned-to-others" : "team")
-      : (initialAssignment === "ME" ? "team-assigned-to-me" : initialAssignment === "OTHERS" ? "team-assigned-to-others" : "all");
+      : (initialAssignment === "ME" ? "all-assigned-to-me" : initialAssignment === "OTHERS" ? "team-assigned-to-others" : "all");
 
   const [initialTasks, teams] = await Promise.all([
     getCalendarTasks(fetchFilter),

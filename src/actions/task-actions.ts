@@ -729,7 +729,7 @@ export async function rescheduleTask(rawInput: RescheduleTaskInput) {
 
 /**
  * Fetch calendar tasks (FR-07, FR-08)
- * Filter: 'all' | 'personal' | 'team' | 'team-assigned-to-me' | 'team-assigned-to-others' | teamId
+ * Filter: 'all' | 'all-assigned-to-me' | 'personal' | 'team' | 'team-assigned-to-me' | 'team-assigned-to-others' | teamId
  */
 export async function getCalendarTasks(filter: string = "all") {
   try {
@@ -755,6 +755,24 @@ export async function getCalendarTasks(filter: string = "all") {
           { assigneeId: userId },
           { createdById: userId },
           { assignees: { some: { userId } } },
+        ],
+      };
+    } else if (
+      filter === "all-assigned-to-me" ||
+      filter === "assigned-to-me" ||
+      filter === "all-me" ||
+      filter === "me"
+    ) {
+      // All tasks assigned to current user (both personal tasks and team tasks)
+      whereCondition = {
+        OR: [
+          // Personal tasks
+          { teamId: null, assigneeId: userId },
+          { teamId: null, createdById: userId },
+          { teamId: null, assignees: { some: { userId } } },
+          // Team tasks assigned to current user in teams user belongs to
+          { teamId: { in: userTeamIds, not: null }, assigneeId: userId },
+          { teamId: { in: userTeamIds, not: null }, assignees: { some: { userId } } },
         ],
       };
     } else if (filter === "team" || filter === "teams") {
