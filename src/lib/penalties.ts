@@ -287,7 +287,19 @@ export async function evaluateAndSyncUserPenalties(
 }
 
 /**
- * Gets monthly penalty counts and historical records.
+ * Helper to calculate start & end Date bounds for a given YYYY-MM string
+ */
+export function getMonthDateRange(monthYearStr: string) {
+  const parts = monthYearStr.split("-");
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10);
+  const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
+  const end = new Date(Date.UTC(year, month, 1, 0, 0, 0));
+  return { start, end };
+}
+
+/**
+ * Gets monthly penalty counts, completion statistics, and historical records.
  */
 export async function getMonthlyPenaltySummary(
   userId: string,
@@ -303,13 +315,16 @@ export async function getMonthlyPenaltySummary(
   const currentMonthYear = formatInTimeZone(new Date(), userTimeZone, "yyyy-MM");
   const selectedMonthYear = monthYear || currentMonthYear;
 
+  const { start: currentMonthStart, end: currentMonthEnd } = getMonthDateRange(currentMonthYear);
+  const { start: selectedMonthStart, end: selectedMonthEnd } = getMonthDateRange(selectedMonthYear);
+
   const userMemberships = await db.teamMember.findMany({
     where: { userId },
     select: { teamId: true },
   });
   const userTeamIds = userMemberships.map((m) => m.teamId);
 
-  // Current Month Counts
+  // Current Month Penalty Counts
   const [currentPersonalCount, currentTeamCount] = await Promise.all([
     db.taskPenalty.count({
       where: {
@@ -326,6 +341,124 @@ export async function getMonthlyPenaltySummary(
           ? { teamId: filterTeamId }
           : { OR: [{ userId }, { teamId: { in: userTeamIds } }] }),
       },
+    }),
+  ]);
+
+  // Completed task counts: Current Month, Selected Month, and Lifetime
+  const [
+    currentPersonalCompleted,
+    currentTeamCompleted,
+    selectedPersonalCompleted,
+    selectedTeamCompleted,
+    lifetimePersonalCompleted,
+    lifetimeTeamCompleted,
+    completedTasks,
+  ] = await Promise.all([
+    // Current month completed personal
+    db.task.count({
+      where: {
+        teamId: null,
+        status: TaskStatus.DONE,
+        date: { gte: currentMonthStart, lt: currentMonthEnd },
+        OR: [
+          { assigneeId: userId },
+          { createdById: userId },
+          { assignees: { some: { userId } } },
+        ],
+      },
+    }),
+    // Current month completed team (assigned to user)
+    db.task.count({
+      where: {
+        teamId: filterTeamId ? filterTeamId : { in: userTeamIds, not: null },
+        status: TaskStatus.DONE,
+        date: { gte: currentMonthStart, lt: currentMonthEnd },
+        OR: [
+          { assigneeId: userId },
+          { assignees: { some: { userId } } },
+        ],
+      },
+    }),
+    // Selected month completed personal
+    db.task.count({
+      where: {
+        teamId: null,
+        status: TaskStatus.DONE,
+        date: { gte: selectedMonthStart, lt: selectedMonthEnd },
+        OR: [
+          { assigneeId: userId },
+          { createdById: userId },
+          { assignees: { some: { userId } } },
+        ],
+      },
+    }),
+    // Selected month completed team
+    db.task.count({
+      where: {
+        teamId: filterTeamId ? filterTeamId : { in: userTeamIds, not: null },
+        status: TaskStatus.DONE,
+        date: { gte: selectedMonthStart, lt: selectedMonthEnd },
+        OR: [
+          { assigneeId: userId },
+          { assignees: { some: { userId } } },
+        ],
+      },
+    }),
+    // Lifetime personal completed
+    db.task.count({
+      where: {
+        teamId: null,
+        status: TaskStatus.DONE,
+        OR: [
+          { assigneeId: userId },
+          { createdById: userId },
+          { assignees: { some: { userId } } },
+        ],
+      },
+    }),
+    // Lifetime team completed
+    db.task.count({
+      where: {
+        teamId: filterTeamId ? filterTeamId : { in: userTeamIds, not: null },
+        status: TaskStatus.DONE,
+        OR: [
+          { assigneeId: userId },
+          { assignees: { some: { userId } } },
+        ],
+      },
+    }),
+    // Completed tasks for selected month inspection
+    db.task.findMany({
+      where: {
+        status: TaskStatus.DONE,
+        date: { gte: selectedMonthStart, lt: selectedMonthEnd },
+        OR: [
+          {
+            teamId: null,
+            OR: [
+              { assigneeId: userId },
+              { createdById: userId },
+              { assignees: { some: { userId } } },
+            ],
+          },
+          {
+            teamId: filterTeamId ? filterTeamId : { in: userTeamIds, not: null },
+            OR: [
+              { assigneeId: userId },
+              { assignees: { some: { userId } } },
+            ],
+          },
+        ],
+      },
+      include: {
+        team: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true, email: true } },
+        assignees: {
+          include: { user: { select: { id: true, name: true, email: true } } },
+        },
+      },
+      orderBy: { date: "desc" },
+      take: 50,
     }),
   ]);
 
@@ -397,6 +530,20 @@ export async function getMonthlyPenaltySummary(
   availableMonthsSet.add(currentMonthYear);
   const availableMonths = Array.from(availableMonthsSet).sort().reverse();
 
+  const currentTotalCompleted = currentPersonalCompleted + currentTeamCompleted;
+  const currentTotalPenalties = currentPersonalCount + currentTeamCount;
+  const currentTotalEvaluated = currentTotalCompleted + currentTotalPenalties;
+  const currentCompletionRate = currentTotalEvaluated > 0
+    ? Math.round((currentTotalCompleted / currentTotalEvaluated) * 100)
+    : 100;
+
+  const selectedTotalCompleted = selectedPersonalCompleted + selectedTeamCompleted;
+  const selectedTotalPenalties = penalties.length;
+  const selectedTotalEvaluated = selectedTotalCompleted + selectedTotalPenalties;
+  const selectedCompletionRate = selectedTotalEvaluated > 0
+    ? Math.round((selectedTotalCompleted / selectedTotalEvaluated) * 100)
+    : 100;
+
   return {
     currentMonthYear,
     selectedMonthYear,
@@ -409,6 +556,25 @@ export async function getMonthlyPenaltySummary(
       personal: selectedPersonalPenalties.length,
       team: selectedTeamPenalties.length,
       total: penalties.length,
+    },
+    completedCounts: {
+      currentMonth: {
+        personal: currentPersonalCompleted,
+        team: currentTeamCompleted,
+        total: currentTotalCompleted,
+        completionRate: currentCompletionRate,
+      },
+      selectedMonth: {
+        personal: selectedPersonalCompleted,
+        team: selectedTeamCompleted,
+        total: selectedTotalCompleted,
+        completionRate: selectedCompletionRate,
+      },
+      lifetime: {
+        personal: lifetimePersonalCompleted,
+        team: lifetimeTeamCompleted,
+        total: lifetimePersonalCompleted + lifetimeTeamCompleted,
+      },
     },
     penalties: penalties.map((p) => ({
       id: p.id,
@@ -425,6 +591,26 @@ export async function getMonthlyPenaltySummary(
       responsibleUser: p.user,
       team: p.team,
     })),
+    completedTasks: completedTasks.map((t) => {
+      const assigneesList =
+        t.assignees && t.assignees.length > 0
+          ? t.assignees.map((a: any) => a.user)
+          : t.assignee
+          ? [t.assignee]
+          : [];
+      return {
+        id: t.id,
+        title: t.title,
+        taskType: t.teamId ? "TEAM" : "PERSONAL",
+        date: toDateString(t.date),
+        timing: t.startTime || "All day",
+        status: t.status,
+        priority: t.priority,
+        team: t.team,
+        assignee: t.assignee,
+        assignees: assigneesList,
+      };
+    }),
     availableMonths,
   };
 }
@@ -569,9 +755,77 @@ export async function getTeamPenaltyData(
     },
   });
 
-  // Calculate member penalty counts for selected month
+  const { start: currentMonthStart, end: currentMonthEnd } = getMonthDateRange(currentMonthYear);
+  const { start: selectedMonthStart, end: selectedMonthEnd } = getMonthDateRange(selectedMonthYear);
+
+  // Retrieve team completed tasks in current month, selected month, and lifetime
+  const [
+    teamLifetimeCompleted,
+    teamCurrentMonthCompleted,
+    teamSelectedMonthCompleted,
+    teamCompletedTasksSelectedMonth,
+    teamLifetimeCompletedTasks,
+  ] = await Promise.all([
+    db.task.count({
+      where: { teamId, status: TaskStatus.DONE },
+    }),
+    db.task.count({
+      where: {
+        teamId,
+        status: TaskStatus.DONE,
+        date: { gte: currentMonthStart, lt: currentMonthEnd },
+      },
+    }),
+    db.task.count({
+      where: {
+        teamId,
+        status: TaskStatus.DONE,
+        date: { gte: selectedMonthStart, lt: selectedMonthEnd },
+      },
+    }),
+    db.task.findMany({
+      where: {
+        teamId,
+        status: TaskStatus.DONE,
+        date: { gte: selectedMonthStart, lt: selectedMonthEnd },
+      },
+      include: {
+        assignee: { select: { id: true, name: true, email: true, image: true } },
+        assignees: {
+          include: { user: { select: { id: true, name: true, email: true, image: true } } },
+        },
+      },
+      orderBy: { date: "desc" },
+    }),
+    db.task.findMany({
+      where: { teamId, status: TaskStatus.DONE },
+      select: {
+        assigneeId: true,
+        assignees: { select: { userId: true } },
+      },
+    }),
+  ]);
+
+  // Calculate member penalty and completed counts for selected month and lifetime
   const memberCounts = team.members.map((m) => {
     const memberPenalties = penalties.filter((p) => p.userId === m.userId);
+    const memberMonthCompleted = teamCompletedTasksSelectedMonth.filter(
+      (t) =>
+        t.assigneeId === m.userId ||
+        t.assignees.some((a) => a.user?.id === m.userId || (a as any).userId === m.userId)
+    ).length;
+    const memberLifetimeCompleted = teamLifetimeCompletedTasks.filter(
+      (t) => t.assigneeId === m.userId || t.assignees.some((a) => a.userId === m.userId)
+    ).length;
+
+    const totalHandledMonth = memberMonthCompleted + memberPenalties.length;
+    const completionRate =
+      totalHandledMonth > 0
+        ? Math.round((memberMonthCompleted / totalHandledMonth) * 100)
+        : memberMonthCompleted > 0
+        ? 100
+        : 100;
+
     return {
       userId: m.userId,
       name: m.user.name || "Anonymous Member",
@@ -579,6 +833,9 @@ export async function getTeamPenaltyData(
       image: m.user.image,
       role: m.role,
       penaltyCount: memberPenalties.length,
+      completedMonth: memberMonthCompleted,
+      completedLifetime: memberLifetimeCompleted,
+      completionRate,
     };
   });
 
@@ -597,6 +854,12 @@ export async function getTeamPenaltyData(
   const isMasterAdmin = callerMember?.role === Role.OWNER;
   const isAdmin = callerMember?.role === Role.ADMIN || isMasterAdmin;
 
+  const totalHandledTeam = teamSelectedMonthCompleted + penalties.length;
+  const teamCompletionRate =
+    totalHandledTeam > 0
+      ? Math.round((teamSelectedMonthCompleted / totalHandledTeam) * 100)
+      : 100;
+
   return {
     teamId: team.id,
     teamName: team.name,
@@ -605,7 +868,13 @@ export async function getTeamPenaltyData(
     selectedMonthYear,
     totalPenalties: penalties.length, // Included sum across all members
     currentMonthTotal,
-    members: memberCounts, // Individual person counts
+    completedCounts: {
+      currentMonth: teamCurrentMonthCompleted,
+      selectedMonth: teamSelectedMonthCompleted,
+      lifetime: teamLifetimeCompleted,
+      completionRate: teamCompletionRate,
+    },
+    members: memberCounts, // Individual person counts & completion stats
     penalties: penalties.map((p) => ({
       id: p.id,
       taskId: p.taskId,
@@ -619,6 +888,24 @@ export async function getTeamPenaltyData(
       monthYear: p.monthYear,
       responsibleUser: p.user,
     })),
+    completedTasks: teamCompletedTasksSelectedMonth.map((t) => {
+      const assigneesList =
+        t.assignees && t.assignees.length > 0
+          ? t.assignees.map((a: any) => a.user)
+          : t.assignee
+          ? [t.assignee]
+          : [];
+      return {
+        id: t.id,
+        title: t.title,
+        date: toDateString(t.date),
+        timing: t.startTime || "All day",
+        status: t.status,
+        priority: t.priority,
+        assignee: t.assignee,
+        assignees: assigneesList,
+      };
+    }),
     availableMonths,
     canEdit: isAdmin,
     currentUserRole: callerMember?.role,

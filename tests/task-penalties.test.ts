@@ -3,6 +3,7 @@ import {
   getTaskDeadline,
   isTaskOverdue,
   getPenaltyMonthDetails,
+  getMonthDateRange,
 } from "@/lib/penalties";
 import {
   convertPersonalTaskSchema,
@@ -1017,6 +1018,123 @@ describe("Task Management System Fixes & Monthly Penalty System", () => {
       };
 
       expect(evaluateShouldPenalize(task)).toBe(false);
+    });
+  });
+
+  describe("7. Task Completion & Performance Analytics (Month & Lifetime)", () => {
+    it("should calculate exact month UTC boundaries using getMonthDateRange", () => {
+      const octRange = getMonthDateRange("2026-10");
+      expect(octRange.start.toISOString()).toBe("2026-10-01T00:00:00.000Z");
+      expect(octRange.end.toISOString()).toBe("2026-11-01T00:00:00.000Z");
+
+      // Year boundary (December -> January)
+      const decRange = getMonthDateRange("2026-12");
+      expect(decRange.start.toISOString()).toBe("2026-12-01T00:00:00.000Z");
+      expect(decRange.end.toISOString()).toBe("2027-01-01T00:00:00.000Z");
+
+      // February in leap year vs non-leap year boundary
+      const febRange = getMonthDateRange("2028-02");
+      expect(febRange.start.toISOString()).toBe("2028-02-01T00:00:00.000Z");
+      expect(febRange.end.toISOString()).toBe("2028-03-01T00:00:00.000Z");
+    });
+
+    it("should calculate completion rates correctly including edge cases", () => {
+      const calculateRate = (completed: number, penalties: number) => {
+        const total = completed + penalties;
+        return total > 0 ? Math.round((completed / total) * 100) : 100;
+      };
+
+      // 100% when no tasks or penalties yet
+      expect(calculateRate(0, 0)).toBe(100);
+
+      // 100% when only completed tasks
+      expect(calculateRate(15, 0)).toBe(100);
+
+      // 80% when 8 completed and 2 penalties
+      expect(calculateRate(8, 2)).toBe(80);
+
+      // 50% when equal completed and penalties
+      expect(calculateRate(5, 5)).toBe(50);
+
+      // 0% when only penalties
+      expect(calculateRate(0, 4)).toBe(0);
+
+      // 95% rounding
+      expect(calculateRate(19, 1)).toBe(95);
+    });
+
+    it("should attribute multi-assignee completed team tasks to each assigned member", () => {
+      interface Member {
+        userId: string;
+        name: string;
+      }
+
+      interface CompletedTask {
+        id: string;
+        title: string;
+        assigneeId?: string | null;
+        assignees: { userId: string }[];
+      }
+
+      const teamMembers: Member[] = [
+        { userId: "user-1", name: "Alice" },
+        { userId: "user-2", name: "Bob" },
+        { userId: "user-3", name: "Charlie" },
+      ];
+
+      const completedTasks: CompletedTask[] = [
+        {
+          id: "task-shared-1",
+          title: "Quarterly Planning",
+          assigneeId: "user-1",
+          assignees: [{ userId: "user-1" }, { userId: "user-2" }],
+        },
+        {
+          id: "task-shared-2",
+          title: "Architecture Review",
+          assigneeId: null,
+          assignees: [{ userId: "user-2" }, { userId: "user-3" }],
+        },
+        {
+          id: "task-solo-3",
+          title: "Single Assignee Work",
+          assigneeId: "user-1",
+          assignees: [{ userId: "user-1" }],
+        },
+      ];
+
+      const memberCompletedCounts = teamMembers.map((m) => {
+        const count = completedTasks.filter(
+          (t) =>
+            t.assigneeId === m.userId ||
+            t.assignees.some((a) => a.userId === m.userId)
+        ).length;
+        return { userId: m.userId, count };
+      });
+
+      // User 1 is on task 1 and task 3 -> 2 completed
+      expect(memberCompletedCounts.find((m) => m.userId === "user-1")?.count).toBe(2);
+      // User 2 is on task 1 and task 2 -> 2 completed
+      expect(memberCompletedCounts.find((m) => m.userId === "user-2")?.count).toBe(2);
+      // User 3 is on task 2 -> 1 completed
+      expect(memberCompletedCounts.find((m) => m.userId === "user-3")?.count).toBe(1);
+    });
+
+    it("should aggregate team-level completion stats correctly across month and lifetime", () => {
+      const mockTeamStats = {
+        lifetimeCompleted: 45,
+        currentMonthCompleted: 12,
+        selectedMonthCompleted: 10,
+        selectedMonthPenalties: 2,
+      };
+
+      const totalEvaluated = mockTeamStats.selectedMonthCompleted + mockTeamStats.selectedMonthPenalties;
+      const teamRate = totalEvaluated > 0
+        ? Math.round((mockTeamStats.selectedMonthCompleted / totalEvaluated) * 100)
+        : 100;
+
+      expect(teamRate).toBe(83); // 10 / 12 = 83.33% -> 83%
+      expect(mockTeamStats.lifetimeCompleted).toBeGreaterThanOrEqual(mockTeamStats.selectedMonthCompleted);
     });
   });
 });

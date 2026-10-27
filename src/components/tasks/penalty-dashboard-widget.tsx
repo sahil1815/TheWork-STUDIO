@@ -20,6 +20,8 @@ import {
   Loader2,
   ArrowUpRight,
   Trash2,
+  Trophy,
+  Check,
 } from "lucide-react";
 import {
   getPenaltySettingsAction,
@@ -48,6 +50,7 @@ export function PenaltyDashboardWidget({
 
   // History Modal State
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyTab, setHistoryTab] = useState<"PENALTIES" | "COMPLETED">("PENALTIES");
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [historyTypeFilter, setHistoryTypeFilter] = useState<"ALL" | "PERSONAL" | "TEAM">("ALL");
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -146,33 +149,53 @@ export function PenaltyDashboardWidget({
     return true;
   });
 
+  const completedTasksToDisplay = (summary?.completedTasks || []).filter((t: any) => {
+    if (historyTypeFilter === "PERSONAL") return t.taskType === "PERSONAL";
+    if (historyTypeFilter === "TEAM") return t.taskType === "TEAM";
+    return true;
+  });
+
   return (
     <div className="space-y-3">
       {/* Overview Banner Card */}
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          {/* Left: Monthly Penalty Title & History Trigger */}
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/60">
-              <ShieldAlert className="h-5 w-5" />
+          {/* Left: Monthly Title & Subtitle */}
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/60">
+              <CheckCircle2 className="h-5 w-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                  Monthly Penalty System
+                  Task Performance & Accountability
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
                   {currentMonthTitle || "Current Month"}
                 </span>
               </div>
               <p className="text-xs text-zinc-500">
-                Track overdue tasks, automated monthly reset, and permanent history records.
+                Track finished tasks, overdue penalties, monthly milestones, and lifetime productivity.
               </p>
             </div>
           </div>
 
-          {/* Right: History View Button */}
-          <div className="flex items-center gap-2 self-start md:self-center">
+          {/* Right: Quick Stats Pills & History Trigger */}
+          <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200/80 dark:border-zinc-700/80 text-xs">
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">
+                {loadingSummary ? "—" : summary?.completedCounts?.currentMonth?.total ?? 0} Done
+              </span>
+              <span className="text-zinc-300 dark:text-zinc-600">•</span>
+              <span className="text-amber-600 dark:text-amber-400 font-bold font-mono">
+                {loadingSummary ? "—" : summary?.currentCounts?.total ?? 0} Penalties
+              </span>
+              <span className="text-zinc-300 dark:text-zinc-600">•</span>
+              <span className="text-zinc-600 dark:text-zinc-400 font-medium">
+                {loadingSummary ? "—" : `${summary?.completedCounts?.currentMonth?.completionRate ?? 100}% Rate`}
+              </span>
+            </div>
+
             <button
               onClick={() => {
                 setSelectedMonth(summary?.currentMonthYear || "");
@@ -182,14 +205,14 @@ export function PenaltyDashboardWidget({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition shadow-2xs"
             >
               <History className="h-3.5 w-3.5 text-zinc-500" />
-              <span>View Penalty History</span>
+              <span>Performance History</span>
             </button>
           </div>
         </div>
 
         {/* Two Independent System Panels: Personal vs Team */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-          {/* 1. Personal Task Penalty Box */}
+          {/* 1. Personal Task Performance Box */}
           <div
             className={`p-3.5 rounded-lg border transition ${
               personalEnabled
@@ -201,7 +224,7 @@ export function PenaltyDashboardWidget({
               <div className="flex items-center gap-2">
                 <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                  Personal Task Penalties
+                  Personal Tasks
                 </span>
               </div>
 
@@ -216,54 +239,97 @@ export function PenaltyDashboardWidget({
                 />
                 <div className="w-8 h-4 bg-zinc-300 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
                 <span className="ml-2 text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
-                  {personalEnabled ? "ON" : "OFF"}
+                  {personalEnabled ? "Penalties ON" : "Penalties OFF"}
                 </span>
               </label>
             </div>
 
-            <div className="flex items-baseline justify-between mt-2.5">
-              <span className="text-xs text-zinc-500">Current Month Count:</span>
-              <span className="text-lg font-black text-blue-600 dark:text-blue-400 font-mono">
-                {loadingSummary ? "—" : summary?.currentCounts?.personal ?? 0}
-              </span>
+            {/* Metrics Row: Completed vs Penalties */}
+            <div className="grid grid-cols-2 gap-2 mt-3 pt-2.5 border-t border-blue-200/60 dark:border-blue-900/40">
+              <div className="space-y-0.5">
+                <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 block">
+                  Completed
+                </span>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                    {loadingSummary ? "—" : summary?.completedCounts?.currentMonth?.personal ?? 0}
+                  </span>
+                  <span className="text-[11px] text-zinc-400">this month</span>
+                </div>
+                <span className="text-[10px] text-zinc-500 font-mono block">
+                  {summary?.completedCounts?.lifetime?.personal ?? 0} lifetime finished
+                </span>
+              </div>
+
+              <div className="space-y-0.5 text-right sm:text-left">
+                <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 block">
+                  Penalties
+                </span>
+                <div className="flex items-baseline gap-1.5 justify-end sm:justify-start">
+                  <span className="text-lg font-black text-blue-600 dark:text-blue-400 font-mono">
+                    {loadingSummary ? "—" : summary?.currentCounts?.personal ?? 0}
+                  </span>
+                  <span className="text-[11px] text-zinc-400">this month</span>
+                </div>
+                <span className="text-[10px] text-zinc-400 block truncate">
+                  {personalEnabled ? "1 per overdue task" : "Enforcement disabled"}
+                </span>
+              </div>
             </div>
-            <p className="text-[10px] text-zinc-400 mt-1">
-              {personalEnabled
-                ? "Active: Overdue personal tasks generate 1 penalty each."
-                : "Disabled: Personal tasks will not incur penalties."}
-            </p>
           </div>
 
-          {/* 2. Team Task Penalty Box (Configured and viewed inside Teams) */}
+          {/* 2. Team Task Performance Box */}
           <div className="p-3.5 rounded-lg border border-purple-200 dark:border-purple-900/60 bg-purple-50/40 dark:bg-purple-950/20">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                 <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                  Team Task Penalties
+                  Team Tasks (Your Work)
                 </span>
               </div>
 
-              {/* View in Teams Link (No editing toggle on task page) */}
               <Link
                 href="/teams"
                 className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 dark:text-purple-300 hover:text-purple-800 dark:hover:text-purple-200 hover:underline"
-                title="View and configure team penalties inside team management"
+                title="View team analytics inside team management"
               >
-                <span>Manage in Teams</span>
+                <span>Team Hub</span>
                 <ArrowUpRight className="h-3 w-3" />
               </Link>
             </div>
 
-            <div className="flex items-baseline justify-between mt-2.5">
-              <span className="text-xs text-zinc-500">Current Month Count:</span>
-              <span className="text-lg font-black text-purple-600 dark:text-purple-400 font-mono">
-                {loadingSummary ? "—" : summary?.currentCounts?.team ?? 0}
-              </span>
+            {/* Metrics Row: Completed vs Penalties */}
+            <div className="grid grid-cols-2 gap-2 mt-3 pt-2.5 border-t border-purple-200/60 dark:border-purple-900/40">
+              <div className="space-y-0.5">
+                <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 block">
+                  Completed
+                </span>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-lg font-black text-purple-600 dark:text-purple-400 font-mono">
+                    {loadingSummary ? "—" : summary?.completedCounts?.currentMonth?.team ?? 0}
+                  </span>
+                  <span className="text-[11px] text-zinc-400">this month</span>
+                </div>
+                <span className="text-[10px] text-zinc-500 font-mono block">
+                  {summary?.completedCounts?.lifetime?.team ?? 0} lifetime finished
+                </span>
+              </div>
+
+              <div className="space-y-0.5 text-right sm:text-left">
+                <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 block">
+                  Penalties
+                </span>
+                <div className="flex items-baseline gap-1.5 justify-end sm:justify-start">
+                  <span className="text-lg font-black text-amber-600 dark:text-amber-400 font-mono">
+                    {loadingSummary ? "—" : summary?.currentCounts?.team ?? 0}
+                  </span>
+                  <span className="text-[11px] text-zinc-400">this month</span>
+                </div>
+                <span className="text-[10px] text-zinc-400 block truncate">
+                  Team tasks assigned to you
+                </span>
+              </div>
             </div>
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">
-              Configured inside each Team. Only Master Admin and Admins can edit team penalty settings.
-            </p>
           </div>
         </div>
       </div>
@@ -338,113 +404,237 @@ export function PenaltyDashboardWidget({
               </div>
             </div>
 
+            {/* View Tab Selector: Penalties vs Completed Tasks */}
+            <div className="flex items-center gap-2 px-6 pt-3 pb-2 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-850/40 shrink-0">
+              <button
+                type="button"
+                onClick={() => setHistoryTab("PENALTIES")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  historyTab === "PENALTIES"
+                    ? "bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 shadow-2xs border border-amber-200 dark:border-amber-900/60"
+                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                }`}
+              >
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                <span>Overdue Penalties ({penaltiesToDisplay.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setHistoryTab("COMPLETED")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  historyTab === "COMPLETED"
+                    ? "bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 shadow-2xs border border-emerald-200 dark:border-emerald-900/60"
+                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                }`}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Completed Tasks ({completedTasksToDisplay.length})</span>
+              </button>
+            </div>
+
             {/* Month Summary Counters */}
-            <div className="px-6 py-3 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900 shrink-0">
+            <div className="px-6 py-2.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/20 dark:bg-zinc-900 shrink-0">
               <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
                 <span>
-                  Showing penalties for <strong>{selectedMonthTitle}</strong>:
+                  {historyTab === "PENALTIES" ? "Penalties for" : "Completed in"}{" "}
+                  <strong>{selectedMonthTitle}</strong>:
                 </span>
                 <div className="flex items-center gap-3 font-mono text-xs">
-                  <span className="text-blue-600 dark:text-blue-400 font-semibold">
-                    Personal: {summary?.selectedCounts?.personal ?? 0}
-                  </span>
-                  <span>•</span>
-                  <span className="text-purple-600 dark:text-purple-400 font-semibold">
-                    Team: {summary?.selectedCounts?.team ?? 0}
-                  </span>
-                  <span>•</span>
-                  <span className="font-bold text-zinc-900 dark:text-zinc-100">
-                    Total: {summary?.selectedCounts?.total ?? 0}
-                  </span>
+                  {historyTab === "PENALTIES" ? (
+                    <>
+                      <span className="text-blue-600 dark:text-blue-400 font-semibold">
+                        Personal: {summary?.selectedCounts?.personal ?? 0}
+                      </span>
+                      <span>•</span>
+                      <span className="text-purple-600 dark:text-purple-400 font-semibold">
+                        Team: {summary?.selectedCounts?.team ?? 0}
+                      </span>
+                      <span>•</span>
+                      <span className="font-bold text-zinc-900 dark:text-zinc-100">
+                        Total: {summary?.selectedCounts?.total ?? 0}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-blue-600 dark:text-blue-400 font-semibold">
+                        Personal: {summary?.completedCounts?.selectedMonth?.personal ?? 0}
+                      </span>
+                      <span>•</span>
+                      <span className="text-purple-600 dark:text-purple-400 font-semibold">
+                        Team: {summary?.completedCounts?.selectedMonth?.team ?? 0}
+                      </span>
+                      <span>•</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                        Total: {summary?.completedCounts?.selectedMonth?.total ?? 0} Done
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* List of Penalties */}
+            {/* List of Penalties or Completed Tasks */}
             <div className="flex-1 overflow-y-auto p-6 divide-y divide-zinc-100 dark:divide-zinc-800">
               {loadingHistory ? (
                 <div className="flex flex-col items-center justify-center py-12 text-zinc-400 space-y-2">
                   <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
-                  <p className="text-xs">Loading penalty records...</p>
+                  <p className="text-xs">Loading records...</p>
                 </div>
-              ) : penaltiesToDisplay.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center text-zinc-500 space-y-2">
-                  <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-                  <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-                    No Penalties Recorded
-                  </p>
-                  <p className="text-xs text-zinc-400 max-w-sm">
-                    No overdue task penalties were recorded for {selectedMonthTitle} under the selected filter.
-                  </p>
-                </div>
-              ) : (
-                penaltiesToDisplay.map((p: any) => {
-                  const isPersonal = p.taskType === "PERSONAL";
-                  return (
-                    <div
-                      key={p.id}
-                      className="py-3.5 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                              isPersonal
-                                ? "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
-                                : "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300"
-                            }`}
+              ) : historyTab === "PENALTIES" ? (
+                penaltiesToDisplay.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center text-zinc-500 space-y-2">
+                    <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                    <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+                      No Penalties Recorded
+                    </p>
+                    <p className="text-xs text-zinc-400 max-w-sm">
+                      No overdue task penalties were recorded for {selectedMonthTitle} under the selected filter.
+                    </p>
+                  </div>
+                ) : (
+                  penaltiesToDisplay.map((p: any) => {
+                    const isPersonal = p.taskType === "PERSONAL";
+                    return (
+                      <div
+                        key={p.id}
+                        className="py-3.5 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                isPersonal
+                                  ? "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
+                                  : "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300"
+                              }`}
+                            >
+                              {isPersonal ? "PERSONAL" : "TEAM"}
+                            </span>
+
+                            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                              {p.taskTitle}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500">
+                            {p.team && (
+                              <span className="flex items-center gap-1 font-medium text-purple-600 dark:text-purple-400">
+                                <Users className="h-3 w-3" />
+                                <span>{p.team.name}</span>
+                              </span>
+                            )}
+
+                            {p.responsibleUser && (
+                              <span className="flex items-center gap-1">
+                                <User className="h-3 w-3 text-zinc-400" />
+                                <span>Responsible: {p.responsibleUser.name || p.responsibleUser.email}</span>
+                              </span>
+                            )}
+
+                            <span className="flex items-center gap-1 font-mono text-[11px]">
+                              <Clock className="h-3 w-3 text-red-500" />
+                              <span>
+                                Deadline: {format(parseISO(p.deadline), "MMM d, yyyy HH:mm")}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 flex items-center gap-2 self-start sm:self-center">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300">
+                            +1 Penalty
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePenalty(p.id, p.taskTitle)}
+                            disabled={removingId === p.id}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50/50 dark:bg-red-950/20 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition disabled:opacity-50"
+                            title="Remove this penalty"
                           >
-                            {isPersonal ? "PERSONAL" : "TEAM"}
-                          </span>
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>{removingId === p.id ? "Removing..." : "Remove"}</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )
+              ) : (
+                /* Completed Tasks Tab Content */
+                completedTasksToDisplay.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center text-zinc-500 space-y-2">
+                    <Info className="h-8 w-8 text-zinc-400" />
+                    <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+                      No Completed Tasks
+                    </p>
+                    <p className="text-xs text-zinc-400 max-w-sm">
+                      No completed tasks were recorded in {selectedMonthTitle} under the selected filter.
+                    </p>
+                  </div>
+                ) : (
+                  completedTasksToDisplay.map((t: any) => {
+                    const isPersonal = t.taskType === "PERSONAL";
+                    return (
+                      <div
+                        key={t.id}
+                        className="py-3.5 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                isPersonal
+                                  ? "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
+                                  : "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300"
+                              }`}
+                            >
+                              {isPersonal ? "PERSONAL" : "TEAM"}
+                            </span>
 
-                          <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                            {p.taskTitle}
-                          </span>
+                            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                              {t.title}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500">
+                            {t.team && (
+                              <span className="flex items-center gap-1 font-medium text-purple-600 dark:text-purple-400">
+                                <Users className="h-3 w-3" />
+                                <span>{t.team.name}</span>
+                              </span>
+                            )}
+
+                            <span className="flex items-center gap-1 font-mono text-[11px]">
+                              <Calendar className="h-3 w-3 text-zinc-400" />
+                              <span>{t.date}</span>
+                            </span>
+
+                            <span className="flex items-center gap-1 font-mono text-[11px]">
+                              <Clock className="h-3 w-3 text-zinc-400" />
+                              <span>{t.timing}</span>
+                            </span>
+
+                            {t.assignee && (
+                              <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400">
+                                <User className="h-3 w-3" />
+                                <span>{t.assignee.name || t.assignee.email}</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500">
-                          {p.team && (
-                            <span className="flex items-center gap-1 font-medium text-purple-600 dark:text-purple-400">
-                              <Users className="h-3 w-3" />
-                              <span>{p.team.name}</span>
-                            </span>
-                          )}
-
-                          {p.responsibleUser && (
-                            <span className="flex items-center gap-1">
-                              <User className="h-3 w-3 text-zinc-400" />
-                              <span>Responsible: {p.responsibleUser.name || p.responsibleUser.email}</span>
-                            </span>
-                          )}
-
-                          <span className="flex items-center gap-1 font-mono text-[11px]">
-                            <Clock className="h-3 w-3 text-red-500" />
-                            <span>
-                              Deadline: {format(parseISO(p.deadline), "MMM d, yyyy HH:mm")}
-                            </span>
+                        <div className="shrink-0 flex items-center gap-2 self-start sm:self-center">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            <Check className="h-3.5 w-3.5" />
+                            <span>Done</span>
                           </span>
                         </div>
                       </div>
-
-                      <div className="shrink-0 flex items-center gap-2 self-start sm:self-center">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300">
-                          +1 Penalty
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePenalty(p.id, p.taskTitle)}
-                          disabled={removingId === p.id}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50/50 dark:bg-red-950/20 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition disabled:opacity-50"
-                          title="Remove this penalty"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          <span>{removingId === p.id ? "Removing..." : "Remove"}</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
+                    );
+                  })
+                )
               )}
             </div>
 
