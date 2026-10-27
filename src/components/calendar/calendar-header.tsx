@@ -181,12 +181,12 @@ export function CalendarHeader({
               onChange={(e) => onFilterChange(e.target.value)}
               className="bg-transparent text-xs font-medium focus:outline-none cursor-pointer max-w-[140px] sm:max-w-none truncate"
             >
-              <option value="all">All Calendars</option>
-              <option value="all-assigned-to-me">All Tasks (Assigned to Me)</option>
-              <option value="personal">Personal Tasks Only</option>
-              <option value="team">All Team Tasks</option>
-              <option value="team-assigned-to-me">Team Tasks (Assigned to Me)</option>
-              <option value="team-assigned-to-others">Team Tasks (Assigned to Others)</option>
+              <option value="all">🌐 Everything</option>
+              <option value="all-assigned-to-me">🎯 All Mine</option>
+              <option value="personal">🔒 Personal Only</option>
+              <option value="team">👥 The Whole Crew</option>
+              <option value="team-assigned-to-me">👤 Team → Me</option>
+              <option value="team-assigned-to-others">👥 Team → Others</option>
               {teams.length > 0 && (
                 <optgroup label="Teams">
                   {teams.map((t) => (
